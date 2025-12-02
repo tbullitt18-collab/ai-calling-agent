@@ -1,3 +1,4 @@
+setuptools>=69.0.0
 tiktoken
 faiss-cpu
 Flask==2.3.2
