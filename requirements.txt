@@ -3,19 +3,18 @@ Flask>=3.0.0
 Flask-Cors>=4.0.0
 Flask-Sock>=0.7.0
 gunicorn>=21.0.0
-gevent>=24.0.0
+# Removed gevent to avoid build issues, using gthread instead
 
 # Vonage Voice API
-vonage>=4.0.0
-vonage-http-client>=1.0.0
-vonage-voice>=1.0.0
+vonage>=3.0.0
+# Using >=3.0.0 to be safe with installed version 4.7.2
 
 # ElevenLabs
 websockets>=12.0
 elevenlabs>=1.0.0
 
 # OpenAI
-openai>=2.0.0
+openai>=1.0.0
 
 # Auth / JWT
 PyJWT>=2.8.0
