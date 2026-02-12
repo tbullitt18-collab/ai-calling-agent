@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  raincheck:
+    build: .
+    container_name: raincheck-app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - raincheck-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+  redis:
+    image: redis:7-alpine
+    container_name: raincheck-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - raincheck-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+    
+  mongodb:
+    image: mongo:7
+    container_name: raincheck-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=raincheck
+    restart: unless-stopped
+    networks:
+      - raincheck-network
+
+  # Optional: Nginx reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    container_name: raincheck-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - raincheck
+    restart: unless-stopped
+    networks:
+      - raincheck-network
+    profiles:
+      - production
+
+networks:
+  raincheck-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
+  mongo_data:
+    driver: local

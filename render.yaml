@@ -1,10 +1,38 @@
 services:
   - type: web
-    name: ai-calling-agent-mcp
+    name: raincheck-api
     runtime: python
     plan: starter
-    buildCommand: bash install_deps.sh
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    buildCommand: pip install setuptools>=69.0.0 && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --worker-class gevent --workers 2 --timeout 120
     envVars:
       - key: PORT
-        value: 8000
+        value: "10000"
+      - key: PYTHON_VERSION
+        value: "3.11.11"
+      - key: VONAGE_APPLICATION_ID
+        sync: false
+      - key: VONAGE_API_KEY
+        sync: false
+      - key: VONAGE_API_SECRET
+        sync: false
+      - key: VONAGE_PRIVATE_KEY
+        sync: false
+      - key: VONAGE_NUMBER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: ELEVENLABS_MODEL_ID
+        value: "eleven_multilingual_v2"
+      - key: MONGODB_URI
+        sync: false
+      - key: BASE_URL
+        sync: false
+      - key: FLASK_ENV
+        value: "production"
+      - key: FLASK_SECRET_KEY
+        generateValue: true

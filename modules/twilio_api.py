@@ -1,41 +1,42 @@
-from twilio.twiml.voice_response import VoiceResponse, Gather
-from .mongodb import has_interacted_before
-from config import TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
+"""
+Twilio Voice API integration for Rain Check.
+Handles call routing, TwiML generation, and Media Stream connections.
+"""
+
 from twilio.rest import Client
-from config import TWILIO_PHONE_NUMBER,NGROK_URL
-twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-from flask import Flask, request, url_for
-ngrok_url = NGROK_URL
-import os
-# static_dir = os.path.join(os.getcwd(), './static')
+from twilio.twiml.voice_response import VoiceResponse, Connect, Stream
+from config import TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER, BASE_URL
 
-def handle_incoming_call(request_body):
+# Initialize Twilio Client
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+
+def generate_answer_twiml(call_sid: str) -> str:
+    """
+    Generate TwiML for answering an incoming call with WebSocket audio.
+    Connects the call to a Media Stream.
+    """
     response = VoiceResponse()
-
-    if not has_interacted_before(request_body['From']):
-        # response.play("Welcome to Jorvana, AI therapist. Please register your phone number on our website.")
-        response.play(url_for('static', filename=f'incomming_alert.mp3', _external=True))
-
-        return str(response)
-
-    # First, play the pre-recorded response
-    response.play(url_for('static', filename=f'response.mp3', _external=True))
-    gather = Gather(input='speech', action=f'https://{ngrok_url}/handle_speech1', timeout=10, speechTimeout='auto')
-    response.append(gather)
+    
+    # Optional greeting before stream starts
+    response.say("Hello, you've reached Rain Check. How can I help you today?")
+    
+    # Connect to Media Stream
+    connect = Connect()
+    stream = Stream(url=f"wss://{BASE_URL.replace('https://', '').replace('http://', '')}/ws/audio/{call_sid}")
+    connect.append(stream)
+    response.append(connect)
+    
     return str(response)
 
-def initiate_call(phone_number):
-    to_number = phone_number
 
-    stat_url=url_for('static', filename=f'response.mp3', _external=True)
-    # Initiate the call with correct TwiML
-    call = twilio_client.calls.create(
-        twiml=f'<Response><Play>https://{ngrok_url}/static/response.mp3</Play><Gather action="https://{ngrok_url}/handle_speech" input="speech" timeout="10" speechTimeout="auto"></Gather></Response>',
+def initiate_outbound_call(to_number: str) -> dict:
+    """
+    Initiate an outbound call that connects to the AI agent.
+    """
+    call = client.calls.create(
+        url=f"{BASE_URL}/webhook/outbound-twiml",
         to=to_number,
         from_=TWILIO_PHONE_NUMBER
     )
-
-    return "Call initiated."
-
-
-
+    return {"uuid": call.sid}
