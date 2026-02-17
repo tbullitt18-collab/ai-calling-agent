@@ -6,8 +6,9 @@ gunicorn>=21.0.0
 # Removed gevent to avoid build issues, using gthread instead
 
 # Vonage Voice API
-vonage>=3.0.0
-# Using >=3.0.0 to be safe with installed version 4.7.2
+vonage>=4.0.0
+vonage-http-client>=1.0.0
+vonage-voice>=1.0.0
 
 # ElevenLabs
 websockets>=12.0

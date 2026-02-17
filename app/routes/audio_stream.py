@@ -110,7 +110,7 @@ def media_stream(ws, call_uuid: str):
       4. Send Claude's response to ElevenLabs TTS
       5. Stream TTS audio back to Vonage
     """
-    logger.info(f"🎙️ WebSocket connected: {call_uuid}")
+    logger.info(f"WebSocket connected: {call_uuid}")
     
     # Load call context
     context = session_manager.get_context(call_uuid) or {}
@@ -192,7 +192,7 @@ def media_stream(ws, call_uuid: str):
     except Exception as e:
         logger.error(f"WebSocket error: {e}", exc_info=True)
     finally:
-        logger.info(f"🔚 WebSocket closed: {call_uuid}")
+        logger.info(f"WebSocket closed: {call_uuid}")
 
 
 def _transcribe_placeholder(audio_buffer: bytearray) -> str:
@@ -256,7 +256,7 @@ def _send_tts_response(
         else:
             return
         
-        logger.info(f"🗣️ AI: \"{response_text}\"")
+        logger.info(f"AI: \"{response_text}\"")
         
         # Synthesize via ElevenLabs TTS
         loop = asyncio.new_event_loop()
