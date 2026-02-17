@@ -5,7 +5,10 @@ Falls back to in-memory storage if Redis is unavailable.
 """
 
 import json
+import logging
 from typing import Optional, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
 
@@ -85,14 +88,14 @@ class SessionManager:
                 # Test connection
                 self.redis.ping()
                 self._use_redis = True
-                print("✅ Connected to Redis for session management")
+                logger.info("Connected to Redis for session management")
             except Exception as e:
-                print(f"⚠️ Redis unavailable ({e}), using in-memory storage")
+                logger.warning(f"Redis unavailable ({e}), using in-memory storage")
                 self.redis = InMemoryStore()
                 # If Redis connection fails, ensure _use_redis is False for context methods
                 self._use_redis = False
         else:
-            print("⚠️ Redis package not installed, using in-memory storage")
+            logger.warning("Redis package not installed, using in-memory storage")
             self.redis = InMemoryStore()
             self._use_redis = False # Explicitly set if Redis package is not installed
         
