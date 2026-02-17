@@ -170,7 +170,8 @@ def initiate_outbound_call(
             raise ValueError("Vonage Application ID not available")
         
         # Generate JWT for Voice API
-        with open('./private.key', 'r') as f:
+        from app.config import VONAGE_PRIVATE_KEY_PATH
+        with open(VONAGE_PRIVATE_KEY_PATH, 'r') as f:
             private_key = f.read()
         
         payload = {
