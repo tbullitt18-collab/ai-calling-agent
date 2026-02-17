@@ -17,7 +17,7 @@ def _get_db():
     global _db
     if _db is None:
         from app.config import MONGODB_URI
-        _db = MongoClient(MONGODB_URI).raincheck
+        _db = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=3000).raincheck
     return _db
 
 class VoiceProfile:
@@ -26,7 +26,17 @@ class VoiceProfile:
     """
     
     def __init__(self):
-        self.collection = _get_db().voice_profiles
+        self._collection = None
+
+    @property
+    def collection(self):
+        if self._collection is None:
+            try:
+                self._collection = _get_db().voice_profiles
+            except Exception as e:
+                logger.warning(f"MongoDB unavailable: {e}")
+                raise
+        return self._collection
 
     def create_profile(self, voice_id: str, name: str, user_id: str = "default") -> str:
         """Create a new voice profile record."""
