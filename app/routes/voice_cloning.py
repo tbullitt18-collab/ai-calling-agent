@@ -41,12 +41,19 @@ def list_voices():
         logger.info(f"Retrieved {len(api_voices)} voices from ElevenLabs API.")
         for v in api_voices:
             voice_id = v.get('voice_id')
+            category = v.get('category')
+            
+            # Filter out preloaded/premade voices
+            if category == 'premade':
+                continue
+                
             if voice_id not in seen_ids:
                 merged_voices.append({
                     "voice_id": voice_id,
                     "name": v.get('name'),
                     "source": "elevenlabs",
-                    "status": "active"
+                    "status": "active",
+                    "category": category
                 })
                 seen_ids.add(voice_id)
     except Exception as e:
