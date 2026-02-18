@@ -2,9 +2,9 @@ services:
   - type: web
     name: raincheck-api
     runtime: python
-    plan: starter
+    plan: free
     buildCommand: pip install --upgrade pip && pip install setuptools>=69.0.0 && pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --worker-class gthread --workers 1 --threads 8 --timeout 120
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
     envVars:
       - key: PORT
         value: "10000"
