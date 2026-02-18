@@ -1,117 +1,105 @@
 #!/usr/bin/env python3
 """
-Render startup script with step-by-step import diagnostics.
-Tests each import individually to pinpoint exactly what crashes.
-If all imports pass, starts gunicorn. If any fail, starts a minimal
-error-reporting server so Render stays 'live' and we can see the error.
+Bulletproof Render startup script.
+Strategy: start error-reporting server in a thread FIRST, 
+then test imports. If imports pass, replace the server with gunicorn.
 """
 import os
 import sys
-import traceback
 import json
+import threading
+import traceback
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-os.environ['PYTHONIOENCODING'] = 'utf-8'
+PORT = int(os.environ.get("PORT", 10000))
+status = {"phase": "starting", "errors": [], "checks": []}
 
-errors = []
+class StatusHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200 if not status["errors"] else 503)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(status, indent=2).encode())
+    def log_message(self, fmt, *args):
+        pass
 
-def test_import(name, code):
-    """Test a single import and record result."""
+# Start HTTP server immediately in a thread
+server = HTTPServer(("0.0.0.0", PORT), StatusHandler)
+server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+server_thread.start()
+print(f"Status server started on port {PORT}", flush=True)
+
+# Now test imports one by one
+def check(name, code):
     try:
-        exec(code, {})
-        print(f"  [OK] {name}", flush=True)
+        exec(code, {"__name__": "__check__"})
+        status["checks"].append({"name": name, "ok": True})
+        print(f"  OK: {name}", flush=True)
         return True
     except Exception as e:
-        msg = f"{type(e).__name__}: {e}"
-        print(f"  [FAIL] {name}: {msg}", flush=True)
-        traceback.print_exc()
-        errors.append({"step": name, "error": msg})
+        err = f"{type(e).__name__}: {e}"
+        tb = traceback.format_exc()
+        status["checks"].append({"name": name, "ok": False, "error": err})
+        status["errors"].append({"step": name, "error": err, "traceback": tb})
+        print(f"  FAIL: {name}: {err}", flush=True)
+        print(tb, flush=True)
         return False
 
-def run_diagnostics():
-    print("=" * 60, flush=True)
-    print("RAIN CHECK - STARTUP DIAGNOSTICS", flush=True)
-    print(f"Python {sys.version}", flush=True)
-    print(f"CWD: {os.getcwd()}", flush=True)
-    print(f"PORT: {os.environ.get('PORT', 'NOT SET')}", flush=True)
-    print("=" * 60, flush=True)
-    
-    steps = [
-        ("flask", "import flask"),
-        ("flask_cors", "import flask_cors"),
-        ("flask_sock", "import flask_sock"),
-        ("openai", "import openai"),
-        ("vonage", "import vonage"),
-        ("pymongo", "import pymongo"),
-        ("redis", "import redis"),
-        ("schedule", "import schedule"),
-        ("websockets", "import websockets"),
-        ("httpx", "import httpx"),
-        ("gunicorn", "import gunicorn"),
-        ("jwt", "import jwt"),
-        ("app.config", "from app.config import FLASK_ENV"),
-        ("app.models.call_session", "from app.models.call_session import SessionManager"),
-        ("app.models.voice_profile", "from app.models.voice_profile import VoiceProfile"),
-        ("app.services.vonage_service", "from app.services.vonage_service import generate_answer_ncco"),
-        ("app.services.conversation_service", "from app.services.conversation_service import ConversationEngine"),
-        ("app.services.elevenlabs_service", "from app.services.elevenlabs_service.voice_synthesis import ElevenLabsRealtimeClient"),
-        ("app.services.elevenlabs_service.voice_cloning", "from app.services.elevenlabs_service.voice_cloning import VoiceCloningService"),
-        ("app.services.scheduler_service", "from app.services.scheduler_service import CallScheduler"),
-        ("app.services.call_logger_service", "from app.services.call_logger_service import get_call_logger"),
-        ("app.__init__", "from app import create_app"),
-        ("create_app()", "from app import create_app; app = create_app()"),
-        ("wsgi module", "import wsgi; app = wsgi.app"),
-    ]
-    
-    all_ok = True
-    for name, code in steps:
-        if not test_import(name, code):
-            all_ok = False
-            # Continue testing to find ALL failures
-    
-    print("=" * 60, flush=True)
-    if all_ok:
-        print("ALL CHECKS PASSED", flush=True)
-    else:
-        print(f"FAILED: {len(errors)} step(s)", flush=True)
-        for e in errors:
-            print(f"  - {e['step']}: {e['error']}", flush=True)
-    print("=" * 60, flush=True)
-    
-    return all_ok
+print("=" * 50, flush=True)
+print(f"Python {sys.version}", flush=True)
+print(f"CWD: {os.getcwd()}", flush=True)
+print(f"Files: {os.listdir('.')}", flush=True)
+print("=" * 50, flush=True)
 
-def start_error_server():
-    """Start a minimal server that reports the error on every request."""
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    
-    class ErrorHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(503)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "status": "startup_failed",
-                "errors": errors
-            }).encode())
-        def log_message(self, format, *args):
-            pass
-    
-    port = int(os.environ.get("PORT", 10000))
-    print(f"Starting error-reporting server on port {port}", flush=True)
-    HTTPServer(("0.0.0.0", port), ErrorHandler).serve_forever()
+all_ok = True
+for name, code in [
+    ("flask", "import flask"),
+    ("flask_cors", "import flask_cors"),
+    ("flask_sock", "import flask_sock"),
+    ("openai", "import openai"),
+    ("vonage", "import vonage"),
+    ("pymongo", "import pymongo"),
+    ("redis_pkg", "import redis"),
+    ("schedule", "import schedule"),
+    ("websockets", "import websockets"),
+    ("httpx", "import httpx"),
+    ("gunicorn", "import gunicorn"),
+    ("jwt", "import jwt"),
+    ("app.config", "from app import config"),
+    ("app.models.call_session", "from app.models import call_session"),
+    ("app.models.voice_profile", "from app.models import voice_profile"),
+    ("app.services.vonage_service", "from app.services import vonage_service"),
+    ("app.services.conversation_service", "from app.services import conversation_service"),
+    ("app.services.elevenlabs_voice_synthesis", "from app.services.elevenlabs_service import voice_synthesis"),
+    ("app.services.elevenlabs_voice_cloning", "from app.services.elevenlabs_service import voice_cloning"),
+    ("app.services.scheduler_service", "from app.services import scheduler_service"),
+    ("app.services.call_logger_service", "from app.services import call_logger_service"),
+    ("app.routes.health", "from app.routes import health"),
+    ("app.routes.audio_stream", "from app.routes import audio_stream"),
+    ("app.routes.voice_cloning_route", "from app.routes import voice_cloning"),
+    ("app.routes.session", "from app.routes import session"),
+    ("app.routes.api", "from app.routes import api"),
+    ("app_init", "from app import create_app"),
+    ("create_app", "from app import create_app; create_app()"),
+]:
+    if not check(name, code):
+        all_ok = False
 
-if __name__ == "__main__":
-    if run_diagnostics():
-        # All good - start gunicorn
-        port = os.environ.get("PORT", "10000")
-        os.execvp("gunicorn", [
-            "gunicorn", "wsgi:app",
-            "--bind", f"0.0.0.0:{port}",
-            "--workers", "1",
-            "--timeout", "120",
-            "--access-logfile", "-",
-            "--error-logfile", "-",
-            "--log-level", "info"
-        ])
-    else:
-        # Start error server so Render stays "live" and we can see errors
-        start_error_server()
+status["phase"] = "all_passed" if all_ok else "failed"
+print(f"\nResult: {'ALL PASSED' if all_ok else 'FAILED'}", flush=True)
+
+if all_ok:
+    print("Stopping status server, starting gunicorn...", flush=True)
+    server.shutdown()
+    os.execvp("gunicorn", [
+        "gunicorn", "wsgi:app",
+        "--bind", f"0.0.0.0:{PORT}",
+        "--workers", "1",
+        "--timeout", "120",
+        "--access-logfile", "-",
+        "--error-logfile", "-",
+    ])
+else:
+    print(f"Keeping error server alive on port {PORT}. Query / for details.", flush=True)
+    status["phase"] = "error_server_running"
+    server_thread.join()  # Keep main thread alive
