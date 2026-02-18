@@ -34,7 +34,13 @@ def _resolve_private_key() -> str:
     Returns path to a readable private key file.
     """
     # Check for inline key content first (production/Render)
-    key_content = os.getenv("VONAGE_PRIVATE_KEY")
+    key_b64 = os.getenv("VONAGE_PRIVATE_KEY_BASE64")
+    if key_b64:
+        import base64
+        key_content = base64.b64decode(key_b64).decode('utf-8')
+    else:
+        key_content = os.getenv("VONAGE_PRIVATE_KEY")
+        
     if key_content:
         # Write to a temp file since Vonage SDK expects a file path
         tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.key', delete=False)
