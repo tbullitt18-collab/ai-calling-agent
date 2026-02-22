@@ -17,6 +17,9 @@ elevenlabs>=1.0.0
 # OpenAI
 openai>=1.0.0
 
+# Deepgram (Speech-to-Text)
+deepgram-sdk>=3.0.0
+
 # Auth / JWT
 PyJWT>=2.8.0
 cryptography>=41.0.0

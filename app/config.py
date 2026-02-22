@@ -76,6 +76,9 @@ ELEVENLABS_MODEL_ID = _get_env("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
 # OpenAI Configuration
 OPENAI_API_KEY = _require_env("OPENAI_API_KEY")
 
+# Deepgram Configuration (Speech-to-Text)
+DEEPGRAM_API_KEY = _get_env("DEEPGRAM_API_KEY")
+
 # Database Configuration
 MONGODB_URI = _get_env("MONGODB_URI", "mongodb://localhost:27017")
 REDIS_URL = _get_env("REDIS_URL", "redis://localhost:6379")

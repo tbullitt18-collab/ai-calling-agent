@@ -26,6 +26,8 @@ services:
         sync: false
       - key: ELEVENLABS_MODEL_ID
         value: "eleven_multilingual_v2"
+      - key: DEEPGRAM_API_KEY
+        sync: false
       - key: MONGODB_URI
         sync: false
       - key: BASE_URL

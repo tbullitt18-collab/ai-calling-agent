@@ -14,7 +14,7 @@ def index():
         "service": "Rain Check AI Voice Application",
         "version": "2.0.0",
         "status": "operational",
-        "telephony": "Twilio + Media Streams",
+        "telephony": "Vonage Voice API + WebSocket",
         "environment": FLASK_ENV
     })
 

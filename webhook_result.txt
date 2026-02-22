@@ -1,0 +1,3 @@
+
+FAILED: 401
+{"type":"https://developer.nexmo.com/api-errors#unauthorized","title":"Unauthorized","detail":"You did not provide correct credentials.","instance":"f772f465-40d8-467b-b005-8d2a66f3aec4"}

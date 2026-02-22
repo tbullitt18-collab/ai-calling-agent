@@ -65,6 +65,7 @@ for name, code in [
     ("httpx", "import httpx"),
     ("gunicorn", "import gunicorn"),
     ("jwt", "import jwt"),
+    ("deepgram", "import deepgram"),
     ("app.config", "from app import config"),
     ("app.models.call_session", "from app.models import call_session"),
     ("app.models.voice_profile", "from app.models import voice_profile"),

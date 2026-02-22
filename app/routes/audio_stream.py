@@ -13,7 +13,6 @@ from app import sock
 from app.services.vonage_service import generate_answer_ncco, generate_error_ncco
 from app.models.call_session import SessionManager
 from app.services.conversation_service import ConversationEngine, AgentPersona
-from app.services.elevenlabs_service.voice_synthesis import ElevenLabsRealtimeClient
 
 logger = logging.getLogger(__name__)
 audio_bp = Blueprint('audio', __name__)
@@ -55,14 +54,34 @@ def webhook_answer():
 
 @audio_bp.route('/webhook/events', methods=['POST'])
 def webhook_events():
-    """Handle Vonage call status events."""
+    """Handle Vonage call status events and persist to MongoDB."""
     data = request.get_json(silent=True) or {}
     status = data.get('status', 'unknown')
     uuid = data.get('uuid', 'unknown')
-    logger.info(f"Call event: {uuid} → {status}")
+    direction = data.get('direction', 'unknown')
+    duration = data.get('duration')
     
+    logger.info(f"Call event: {uuid} → {status} (direction={direction})")
+    
+    # Log terminal call events to MongoDB
     if status in ('completed', 'failed', 'rejected', 'timeout', 'cancelled'):
         logger.info(f"Call {uuid} ended with status: {status}")
+        try:
+            from app.services.call_logger_service import get_call_logger
+            call_logger = get_call_logger()
+            if call_logger.calls is not None:
+                call_logger.calls.update_one(
+                    {"call_uuid": uuid},
+                    {"$set": {
+                        "status": status,
+                        "end_reason": data.get('reason', ''),
+                        "duration_seconds": int(duration) if duration else 0,
+                    }},
+                    upsert=True
+                )
+                logger.info(f"Call event logged to MongoDB: {uuid} → {status}")
+        except Exception as e:
+            logger.warning(f"Failed to log call event to MongoDB: {e}")
     
     return '', 204
 
@@ -161,10 +180,8 @@ def media_stream(ws, call_uuid: str):
                         if len(audio_buffer) > 4800:  # Minimum 150ms of actual speech
                             logger.info(f"Speech detected: {len(audio_buffer)} bytes")
                             
-                            # For now, use a simple approach: 
-                            # treat incoming audio as "manager is speaking"
-                            # and generate a contextual AI response
-                            manager_text = _transcribe_placeholder(audio_buffer)
+                            # Transcribe audio using Deepgram STT
+                            manager_text = _transcribe_audio(audio_buffer)
                             
                             if manager_text:
                                 logger.info(f"Manager (inferred): {manager_text}")
@@ -195,28 +212,73 @@ def media_stream(ws, call_uuid: str):
         logger.info(f"WebSocket closed: {call_uuid}")
 
 
-def _transcribe_placeholder(audio_buffer: bytearray) -> str:
+def _transcribe_audio(audio_buffer: bytearray) -> str:
     """
-    Placeholder transcription based on audio energy and duration.
+    Transcribe audio using Deepgram Speech-to-Text API.
     
-    In production, replace with:
-      - Deepgram STT API
-      - Google Cloud Speech-to-Text
-      - Whisper API
+    Sends PCM 16kHz 16-bit audio to Deepgram's pre-recorded endpoint
+    and returns the transcription text.
     
-    For now, we detect that someone spoke and generate a contextual response.
-    Returns a generic prompt for Claude to continue the conversation.
+    Args:
+        audio_buffer: Raw PCM 16kHz 16-bit LE audio bytes
+        
+    Returns:
+        Transcribed text, or None if transcription failed/empty
     """
+    from app.config import DEEPGRAM_API_KEY
+    
     duration_seconds = len(audio_buffer) / (16000 * 2)  # 16kHz, 16-bit
     
     if duration_seconds < 0.5:
         return None
-    elif duration_seconds < 2.0:
-        return "Okay."
-    elif duration_seconds < 5.0:
-        return "I see. Can you tell me more about that?"
-    else:
-        return "I understand. Is there anything specific you need from me regarding this?"
+    
+    if not DEEPGRAM_API_KEY:
+        logger.warning("DEEPGRAM_API_KEY not set — cannot transcribe audio")
+        return None
+    
+    try:
+        import requests as req
+        
+        # Send raw PCM audio to Deepgram's pre-recorded endpoint
+        response = req.post(
+            "https://api.deepgram.com/v1/listen",
+            headers={
+                "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                "Content-Type": "audio/l16;rate=16000",
+            },
+            params={
+                "model": "nova-2",
+                "language": "en",
+                "smart_format": "true",
+                "punctuate": "true",
+            },
+            data=bytes(audio_buffer),
+            timeout=10,
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"Deepgram STT error: {response.status_code} {response.text[:200]}")
+            return None
+        
+        result = response.json()
+        transcript = (
+            result.get("results", {})
+            .get("channels", [{}])[0]
+            .get("alternatives", [{}])[0]
+            .get("transcript", "")
+            .strip()
+        )
+        
+        if transcript:
+            logger.info(f"Deepgram STT ({duration_seconds:.1f}s audio): \"{transcript}\"")
+            return transcript
+        else:
+            logger.info(f"Deepgram STT: empty transcript ({duration_seconds:.1f}s audio)")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Deepgram STT error: {e}")
+        return None
 
 
 def _send_tts_response(
@@ -284,20 +346,47 @@ async def _synthesize_and_convert(text: str, voice_id: str = None) -> bytes:
     """
     Synthesize text to PCM 16kHz 16-bit audio via ElevenLabs.
     
-    ElevenLabs returns MP3 by default in TTS mode, but we can
-    request PCM output for direct Vonage compatibility.
+    Uses the ElevenLabs REST API with output_format=pcm_16000 to get
+    raw PCM audio directly compatible with Vonage WebSocket.
     """
-    client = ElevenLabsRealtimeClient(voice_id=voice_id)
+    from app.config import ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID
+    import requests as req
+    
+    vid = voice_id or ELEVENLABS_VOICE_ID
+    
     try:
-        await client.connect_tts()
-        audio_data = await client.synthesize_text(text)
+        # Use REST API for simplicity and direct PCM output
+        response = req.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{vid}",
+            headers={
+                "xi-api-key": ELEVENLABS_API_KEY,
+                "Content-Type": "application/json",
+                "Accept": "audio/pcm",
+            },
+            params={
+                "output_format": "pcm_16000",  # PCM 16kHz 16-bit signed LE
+            },
+            json={
+                "text": text,
+                "model_id": ELEVENLABS_MODEL_ID,
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "style": 0.0,
+                    "use_speaker_boost": True,
+                },
+            },
+            timeout=15,
+        )
         
-        # The ElevenLabs TTS streaming returns audio chunks
-        # In a production setup, we'd configure output format to PCM
-        # For now, return the raw audio (may need format conversion)
+        if response.status_code != 200:
+            logger.error(f"ElevenLabs TTS error: {response.status_code} {response.text[:200]}")
+            return None
+        
+        audio_data = response.content
+        logger.info(f"ElevenLabs TTS: synthesized {len(audio_data)} bytes of PCM audio")
         return audio_data
+        
     except Exception as e:
         logger.error(f"ElevenLabs synthesis error: {e}")
         return None
-    finally:
-        await client.close()

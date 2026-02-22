@@ -1,52 +1,82 @@
 """
-Tests for Rain Check Twilio endpoints.
+Tests for Rain Check webhook endpoints (Vonage-based).
 """
 
 import pytest
-from app import app
 from unittest.mock import patch, MagicMock
+
 
 @pytest.fixture
 def client():
+    from app import create_app
+    app = create_app()
     app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+    with app.test_client() as c:
+        yield c
+
 
 def test_health_check(client):
-    """Test health check endpoint."""
-    response = client.get('/')
+    """Test health check endpoint returns correct provider info."""
+    response = client.get('/health')
     assert response.status_code == 200
-    assert response.json['status'] == 'operational'
+    assert response.json['status'] == 'ok'
 
-@patch('modules.twilio_api.generate_answer_twiml')
-@patch('modules.session_manager.SessionManager.create_session')
-def test_webhook_answer(mock_create_session, mock_twiml, client):
-    """Test Twilio answer webhook."""
-    # Mock TwiML generation
-    mock_twiml.return_value = "<Response><Say>Test</Say></Response>"
+
+def test_webhook_answer_returns_ncco(client):
+    """Test Vonage answer webhook returns valid NCCO JSON."""
+    response = client.get('/webhook/answer?uuid=test-call-123&from=+15550001234')
     
-    # Twilio sends form data
-    response = client.post('/webhook/answer', data={
-        'CallSid': 'CA12345',
-        'From': '+15550001234'
+    assert response.status_code == 200
+    ncco = response.get_json()
+    assert isinstance(ncco, list)
+    assert len(ncco) >= 1
+    # First action should be a talk greeting
+    assert ncco[0]['action'] == 'talk'
+    # Second action should connect to WebSocket
+    assert ncco[1]['action'] == 'connect'
+    assert ncco[1]['endpoint'][0]['type'] == 'websocket'
+    assert 'ws/audio/test-call-123' in ncco[1]['endpoint'][0]['uri']
+
+
+def test_webhook_events_accepts_post(client):
+    """Test Vonage event webhook accepts POST and returns 204."""
+    response = client.post('/webhook/events', json={
+        'uuid': 'test-call-123',
+        'status': 'ringing'
     })
-    
-    assert response.status_code == 200
-    assert response.mimetype == 'text/xml'
-    assert b'<Response><Say>Test</Say></Response>' in response.data
-    
-    # Verify session creation
-    mock_create_session.assert_called_with('CA12345', '+15550001234')
+    assert response.status_code == 204
 
-@patch('modules.twilio_api.initiate_outbound_call')
-def test_api_initiate_call(mock_initiate, client):
-    """Test outbound call API."""
-    mock_initiate.return_value = {"uuid": "CA99999"}
+
+def test_api_initiate_call_requires_number(client):
+    """Test that /api/call/initiate rejects missing phone number."""
+    response = client.post('/api/call/initiate', json={})
+    assert response.status_code == 400
+    assert 'error' in response.json
+
+
+@patch('app.services.vonage_service.initiate_outbound_call')
+def test_api_initiate_call_success(mock_call, client):
+    """Test successful call initiation via API."""
+    mock_call.return_value = {"uuid": "vonage-uuid-456"}
     
     response = client.post('/api/call/initiate', json={
-        'to': '+15550009999'
+        'to': '+15559998888',
+        'reason': 'Sick Day'
     })
     
     assert response.status_code == 200
     assert response.json['status'] == 'initiated'
-    assert response.json['call_uuid'] == 'CA99999'
+    assert response.json['call_uuid'] == 'vonage-uuid-456'
+    mock_call.assert_called_once()
+
+
+def test_session_schedule_requires_fields(client):
+    """Test that scheduling requires number and time."""
+    response = client.post('/session/schedule', json={})
+    assert response.status_code == 400
+
+
+def test_session_call_now_requires_number(client):
+    """Test that call-now requires a phone number."""
+    response = client.post('/session/call-now', json={})
+    assert response.status_code == 400

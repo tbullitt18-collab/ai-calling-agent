@@ -113,7 +113,7 @@ class ElevenLabsRealtimeClient:
         config_msg = {
             "type": "conversation.config",
             "voice_id": self.voice_id,
-            "output_format": "ulaw_8000" # Match Twilio format
+            "output_format": "pcm_16000" # Match Vonage format (PCM 16kHz 16-bit)
         }
         
         if conversation_config:
