@@ -76,6 +76,7 @@ for name, code in [
     ("app.services.scheduler_service", "from app.services import scheduler_service"),
     ("app.services.call_logger_service", "from app.services import call_logger_service"),
     ("app.routes.health", "from app.routes import health"),
+    ("app.routes.auth", "from app.routes import auth"),
     ("app.routes.audio_stream", "from app.routes import audio_stream"),
     ("app.routes.voice_cloning_route", "from app.routes import voice_cloning"),
     ("app.routes.session", "from app.routes import session"),

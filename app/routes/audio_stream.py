@@ -94,18 +94,29 @@ def pcm16_to_float(pcm_bytes: bytes) -> list:
     return [s / 32768.0 for s in samples]
 
 
-def detect_silence(pcm_bytes: bytes, threshold: float = 0.01, min_silent_frames: int = 8000) -> bool:
+def _compute_rms(pcm_bytes: bytes) -> float:
+    """Compute RMS energy of a PCM 16-bit audio chunk."""
+    if len(pcm_bytes) < 2:
+        return 0.0
+    samples = pcm16_to_float(pcm_bytes)
+    return (sum(s * s for s in samples) / len(samples)) ** 0.5
+
+
+def _has_speech(pcm_bytes: bytes, threshold: float = 0.015) -> bool:
+    """Check if a PCM audio chunk contains speech energy above threshold."""
+    return _compute_rms(pcm_bytes) > threshold
+
+
+def _tail_is_silent(pcm_bytes: bytes, threshold: float = 0.015, tail_ms: int = 500) -> bool:
     """
-    Detect if a PCM audio buffer is 'silent' (below energy threshold).
-    min_silent_frames = 8000 at 16kHz ≈ 500ms of silence.
+    Check if the tail end of a buffer is silent.
+    tail_ms: how many milliseconds of silence at the end to require.
     """
-    if len(pcm_bytes) < min_silent_frames * 2:
+    tail_bytes = int(16000 * 2 * tail_ms / 1000)  # 16kHz, 16-bit = 2 bytes/sample
+    if len(pcm_bytes) < tail_bytes:
         return False
-    
-    # Check the tail end for silence
-    tail = pcm_bytes[-(min_silent_frames * 2):]
-    samples = pcm16_to_float(tail)
-    rms = (sum(s * s for s in samples) / len(samples)) ** 0.5
+    tail = pcm_bytes[-tail_bytes:]
+    rms = _compute_rms(tail)
     return rms < threshold
 
 
@@ -122,12 +133,10 @@ def media_stream(ws, call_uuid: str):
     """
     WebSocket handler for Vonage audio streaming.
     
-    Flow:
-      1. Receive PCM 16kHz audio from Vonage
-      2. Buffer until silence detected (end of speech)
-      3. Send transcript to Claude for response
-      4. Send Claude's response to ElevenLabs TTS
-      5. Stream TTS audio back to Vonage
+    Speech detection state machine:
+      IDLE → speech energy detected → SPEAKING (start buffering)
+      SPEAKING → tail silence detected → process buffer (STT → GPT → TTS)
+      After processing → back to IDLE
     """
     logger.info(f"WebSocket connected: {call_uuid}")
     
@@ -144,25 +153,19 @@ def media_stream(ws, call_uuid: str):
     engine = ConversationEngine(persona=persona)
     conversation_history = []
     
-    # Audio buffer for incoming speech
+    # Speech state machine
     audio_buffer = bytearray()
-    is_speaking = False
-    silence_counter = 0
+    is_speaking = False  # True when we've detected speech and are buffering
     
-    # Track if we've sent the initial greeting through TTS
-    has_greeted = False
+    # Thresholds
+    SPEECH_THRESHOLD = 0.015   # RMS above this = speech detected
+    MIN_SPEECH_SECS = 0.5      # Minimum speech duration before STT
+    MAX_BUFFER_SECS = 10.0     # Safety limit to prevent unbounded growth
+    TAIL_SILENCE_MS = 700      # ms of silence at tail to end utterance
     
     logger.info(f"Call context — Reason: {reason}, Voice: {voice_id}")
     
     try:
-        # Send initial AI greeting via TTS
-        greeting = "Hi, this is calling about a schedule update. I won't be able to make it in today."
-        if reason and reason != 'calling in':
-            greeting = f"Hi, this is calling about {reason}. I wanted to let you know as soon as possible."
-        
-        _send_tts_response(ws, greeting, voice_id, engine, conversation_history, call_uuid)
-        has_greeted = True
-        
         # Main audio receive loop
         while True:
             message = ws.receive()
@@ -172,26 +175,53 @@ def media_stream(ws, call_uuid: str):
             
             # Vonage sends binary PCM audio or text control messages
             if isinstance(message, bytes):
-                audio_buffer.extend(message)
+                chunk = message
+                buf_secs = len(audio_buffer) / (16000 * 2)
                 
-                # Check for end of speech (silence detection)
-                if len(audio_buffer) > 16000 * 2:  # At least 1 second of audio
-                    if detect_silence(bytes(audio_buffer)):
-                        if len(audio_buffer) > 4800:  # Minimum 150ms of actual speech
-                            logger.info(f"Speech detected: {len(audio_buffer)} bytes")
-                            
-                            # Transcribe audio using Deepgram STT
-                            manager_text = _transcribe_audio(audio_buffer)
-                            
-                            if manager_text:
-                                logger.info(f"Manager (inferred): {manager_text}")
-                                _send_tts_response(
-                                    ws, None, voice_id, engine, 
-                                    conversation_history, call_uuid,
-                                    user_message=manager_text
-                                )
-                        
+                if not is_speaking:
+                    # ── IDLE state: waiting for speech to start ──
+                    if _has_speech(chunk, SPEECH_THRESHOLD):
+                        is_speaking = True
                         audio_buffer.clear()
+                        audio_buffer.extend(chunk)
+                        logger.info("Speech started (energy detected)")
+                else:
+                    # ── SPEAKING state: buffering audio ──
+                    audio_buffer.extend(chunk)
+                    buf_secs = len(audio_buffer) / (16000 * 2)
+                    
+                    # Log buffer growth periodically (~every 1s)
+                    if len(audio_buffer) % 32000 < len(chunk):
+                        logger.info(f"Buffering speech: {len(audio_buffer)} bytes ({buf_secs:.1f}s)")
+                    
+                    # Check for end of speech (tail silence) or max buffer
+                    should_process = False
+                    
+                    if buf_secs >= MAX_BUFFER_SECS:
+                        logger.info(f"Max buffer reached ({buf_secs:.1f}s), processing")
+                        should_process = True
+                    elif buf_secs >= MIN_SPEECH_SECS and _tail_is_silent(bytes(audio_buffer), SPEECH_THRESHOLD, TAIL_SILENCE_MS):
+                        logger.info(f"Speech ended (silence detected): {len(audio_buffer)} bytes ({buf_secs:.1f}s)")
+                        should_process = True
+                    
+                    if should_process:
+                        # Transcribe audio using Deepgram STT
+                        logger.info("Sending to Deepgram STT...")
+                        manager_text = _transcribe_audio(audio_buffer)
+                        
+                        if manager_text:
+                            logger.info(f"STT result: '{manager_text}' — sending to GPT...")
+                            _send_tts_response(
+                                ws, None, voice_id, engine, 
+                                conversation_history, call_uuid,
+                                user_message=manager_text
+                            )
+                        else:
+                            logger.info("STT returned empty — skipping (likely background noise)")
+                        
+                        # Reset state machine
+                        audio_buffer.clear()
+                        is_speaking = False
             
             elif isinstance(message, str):
                 # Vonage text control messages
@@ -244,13 +274,16 @@ def _transcribe_audio(audio_buffer: bytearray) -> str:
             "https://api.deepgram.com/v1/listen",
             headers={
                 "Authorization": f"Token {DEEPGRAM_API_KEY}",
-                "Content-Type": "audio/l16;rate=16000",
+                "Content-Type": "application/octet-stream",
             },
             params={
                 "model": "nova-2",
                 "language": "en",
                 "smart_format": "true",
                 "punctuate": "true",
+                "encoding": "linear16",
+                "sample_rate": 16000,
+                "channels": 1,
             },
             data=bytes(audio_buffer),
             timeout=10,

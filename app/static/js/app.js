@@ -51,7 +51,6 @@ function renderVoices() {
                     <h3>${v.name}</h3>
                     ${sourceTag}
                 </div>
-                <p style="font-family: monospace; font-size: 0.65rem; margin-top: 2px;">${v.voice_id}</p>
             </div>
             ${activeIndicator}
         `;
@@ -62,6 +61,13 @@ function renderVoices() {
 function selectVoice(voiceId) {
     activeVoiceId = voiceId;
     renderVoices(); // Instant update!
+}
+
+async function logout() {
+    try {
+        await fetch('/logout', { method: 'POST' });
+    } catch (e) { }
+    window.location.href = '/login';
 }
 
 
@@ -199,4 +205,3 @@ async function callNow() {
 
 // Initial load
 fetchVoices();
-
