@@ -18,6 +18,7 @@
             --text-secondary: #8b949e;
             --glass-border: rgba(255, 255, 255, 0.1);
             --error-red: #f85149;
+            --success-green: #3fb950;
         }
 
         * {
@@ -92,13 +93,13 @@
         }
 
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.25rem;
         }
 
         label {
             display: block;
             margin-bottom: 0.5rem;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             color: var(--text-secondary);
             font-weight: 600;
             text-transform: uppercase;
@@ -109,7 +110,7 @@
             width: 100%;
             background: rgba(0, 0, 0, 0.3);
             border: 1px solid var(--glass-border);
-            padding: 0.9rem 1rem;
+            padding: 0.85rem 1rem;
             border-radius: 12px;
             color: white;
             font-size: 0.95rem;
@@ -126,7 +127,7 @@
             color: rgba(255, 255, 255, 0.25);
         }
 
-        .btn-login {
+        .btn-primary {
             width: 100%;
             background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
             color: white;
@@ -140,16 +141,16 @@
             letter-spacing: 0.3px;
         }
 
-        .btn-login:hover {
+        .btn-primary:hover {
             opacity: 0.92;
             transform: translateY(-1px);
         }
 
-        .btn-login:active {
+        .btn-primary:active {
             transform: translateY(0);
         }
 
-        .btn-login:disabled {
+        .btn-primary:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none;
@@ -162,6 +163,13 @@
             margin-top: 1rem;
             min-height: 1.2rem;
             animation: shake 0.4s ease;
+        }
+
+        .success-msg {
+            color: var(--success-green);
+            font-size: 0.8rem;
+            text-align: center;
+            margin-top: 1rem;
         }
 
         @keyframes shake {
@@ -180,11 +188,35 @@
             }
         }
 
+        .toggle-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .toggle-link a {
+            color: var(--accent-blue);
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .toggle-link a:hover {
+            color: var(--accent-purple);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
         .footer {
             text-align: center;
             margin-top: 1.5rem;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-secondary);
+            opacity: 0.6;
         }
     </style>
 </head>
@@ -194,22 +226,52 @@
         <div class="login-card">
             <div class="logo">
                 <h1><span class="drop">💧</span> Rain Check</h1>
-                <p>AI Voice Twin Dashboard</p>
+                <p id="formTitle">Sign in to your dashboard</p>
             </div>
 
+            <!-- LOGIN FORM -->
             <form id="loginForm" onsubmit="return handleLogin(event)">
                 <div class="form-group">
                     <label>Username</label>
-                    <input type="text" id="username" placeholder="Enter username" autocomplete="username" required>
+                    <input type="text" id="loginUsername" placeholder="Enter username" autocomplete="username" required>
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password"
-                        required>
+                    <input type="password" id="loginPassword" placeholder="Enter password"
+                        autocomplete="current-password" required>
                 </div>
-                <button type="submit" class="btn-login" id="loginBtn">Sign In</button>
-                <div class="error-msg" id="errorMsg"></div>
+                <button type="submit" class="btn-primary" id="loginBtn">Sign In</button>
+                <div class="error-msg" id="loginError"></div>
             </form>
+
+            <!-- REGISTER FORM -->
+            <form id="registerForm" class="hidden" onsubmit="return handleRegister(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="regUsername" placeholder="Choose a username" autocomplete="username"
+                        minlength="3" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="regPassword" placeholder="Create a password" autocomplete="new-password"
+                        minlength="6" required>
+                </div>
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="regConfirm" placeholder="Confirm your password"
+                        autocomplete="new-password" minlength="6" required>
+                </div>
+                <button type="submit" class="btn-primary" id="registerBtn">Create Account</button>
+                <div class="error-msg" id="registerError"></div>
+            </form>
+
+            <!-- TOGGLE -->
+            <div class="toggle-link" id="toggleLogin">
+                Don't have an account? <a onclick="showRegister()">Create one</a>
+            </div>
+            <div class="toggle-link hidden" id="toggleRegister">
+                Already have an account? <a onclick="showLogin()">Sign in</a>
+            </div>
 
             <div class="footer">
                 Secured with session-based authentication
@@ -218,10 +280,30 @@
     </div>
 
     <script>
+        function showRegister() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+            document.getElementById('toggleLogin').classList.add('hidden');
+            document.getElementById('toggleRegister').classList.remove('hidden');
+            document.getElementById('formTitle').textContent = 'Create your account';
+            document.getElementById('loginError').textContent = '';
+            document.getElementById('registerError').textContent = '';
+        }
+
+        function showLogin() {
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('toggleRegister').classList.add('hidden');
+            document.getElementById('toggleLogin').classList.remove('hidden');
+            document.getElementById('formTitle').textContent = 'Sign in to your dashboard';
+            document.getElementById('loginError').textContent = '';
+            document.getElementById('registerError').textContent = '';
+        }
+
         async function handleLogin(e) {
             e.preventDefault();
             const btn = document.getElementById('loginBtn');
-            const errEl = document.getElementById('errorMsg');
+            const errEl = document.getElementById('loginError');
 
             btn.disabled = true;
             btn.textContent = 'Signing in...';
@@ -232,8 +314,8 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        username: document.getElementById('username').value,
-                        password: document.getElementById('password').value
+                        username: document.getElementById('loginUsername').value,
+                        password: document.getElementById('loginPassword').value
                     })
                 });
 
@@ -249,6 +331,49 @@
                 errEl.textContent = 'Network error. Is the server running?';
                 btn.disabled = false;
                 btn.textContent = 'Sign In';
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const btn = document.getElementById('registerBtn');
+            const errEl = document.getElementById('registerError');
+
+            const password = document.getElementById('regPassword').value;
+            const confirm = document.getElementById('regConfirm').value;
+
+            if (password !== confirm) {
+                errEl.textContent = "Passwords don't match";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+            errEl.textContent = '';
+
+            try {
+                const resp = await fetch('/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: document.getElementById('regUsername').value,
+                        password: password,
+                        confirm_password: confirm
+                    })
+                });
+
+                const data = await resp.json();
+                if (resp.ok) {
+                    window.location.href = data.redirect || '/';
+                } else {
+                    errEl.textContent = data.error || 'Registration failed';
+                    btn.disabled = false;
+                    btn.textContent = 'Create Account';
+                }
+            } catch (err) {
+                errEl.textContent = 'Network error. Is the server running?';
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
             }
         }
     </script>

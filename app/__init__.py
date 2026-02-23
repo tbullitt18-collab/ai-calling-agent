@@ -35,7 +35,7 @@ def create_app():
     def require_login():
         """Gate all dashboard routes behind authentication."""
         # Allow unauthenticated access to these paths
-        public_paths = ['/login', '/health', '/webhook/', '/ws/', '/static/']
+        public_paths = ['/login', '/register', '/health', '/webhook/', '/ws/', '/static/']
         path = request.path
         
         if any(path.startswith(p) for p in public_paths):
