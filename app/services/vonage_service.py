@@ -103,12 +103,6 @@ def generate_answer_ncco(call_uuid: str, reason: str = None, voice_id: str = Non
     
     ncco = [
         {
-            "action": "talk",
-            "text": "Hello, this is Rain Check. Preparing your AI voice twin now.",
-            "language": "en-US",
-            "style": 0
-        },
-        {
             "action": "connect",
             "endpoint": [
                 {
