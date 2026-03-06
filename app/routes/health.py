@@ -22,3 +22,28 @@ def index():
 def health():
     """Detailed health status."""
     return jsonify({"status": "ok"})
+
+@health_bp.route('/health/db', methods=['GET'])
+def health_db():
+    """Debug: check MongoDB connectivity."""
+    import os
+    uri = os.getenv('MONGODB_URI', 'NOT SET')
+    # Mask the URI for security (show scheme + host only)
+    if uri and uri != 'NOT SET':
+        masked = uri[:20] + '...' + uri[-20:] if len(uri) > 40 else uri
+    else:
+        masked = uri
+
+    result = {"mongodb_uri_set": uri != 'NOT SET', "uri_preview": masked}
+
+    try:
+        from pymongo import MongoClient
+        client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+        client.admin.command('ping')
+        result["connection"] = "ok"
+        result["databases"] = client.list_database_names()
+    except Exception as e:
+        result["connection"] = "failed"
+        result["error"] = str(e)
+
+    return jsonify(result)
