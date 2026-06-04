@@ -1,14 +1,14 @@
 """
 Conversation engine for Rain Check.
-Generates contextual, persona-aware responses using Anthropic Claude.
+Generates contextual, persona-aware responses using Google Gemini and MongoDB MCP.
 """
 
-import anthropic
+import google.generativeai as genai
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from config import CLAUDE_API_KEY
+from config import GEMINI_API_KEY
 
-client = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
 
 
 @dataclass
@@ -24,12 +24,16 @@ class AgentPersona:
 
 class ConversationEngine:
     """
-    Generates AI responses with personality and context awareness using Claude.
+    Generates AI responses with personality and context awareness using Gemini.
     """
     
     def __init__(self, persona: AgentPersona = None):
         self.persona = persona or AgentPersona()
         self.system_prompt = self._build_system_prompt()
+        self.model = genai.GenerativeModel(
+            'gemini-1.5-flash',
+            system_instruction=self.system_prompt
+        )
         
     def _build_system_prompt(self) -> str:
         """Build system prompt based on persona configuration."""
@@ -53,29 +57,30 @@ PERSONALITY:
         max_tokens: int = 150
     ) -> str:
         """
-        Generate a contextual response to the user's message.
+        Generate a contextual response to the user's message using Gemini.
         """
         messages = []
         
         if conversation_history:
             for turn in conversation_history[-10:]:
-                role = "user" if turn["role"] == "user" else "assistant"
+                # Map roles to Gemini's format ('user' and 'model')
+                role = "user" if turn["role"] == "user" else "model"
                 messages.append({
                     "role": role,
-                    "content": turn["content"]
+                    "parts": [turn["content"]]
                 })
                 
-        messages.append({"role": "user", "content": user_message})
-        
+        # We start a chat session with the history
         try:
-            response = client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=max_tokens,
-                system=self.system_prompt,
-                messages=messages,
-                temperature=0.7
+            chat = self.model.start_chat(history=messages)
+            response = chat.send_message(
+                user_message,
+                generation_config=genai.GenerationConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=0.7,
+                )
             )
-            return response.content[0].text
+            return response.text
             
         except Exception as e:
             print(f"Error generating response: {e}")
@@ -84,3 +89,7 @@ PERSONALITY:
     def update_persona(self, persona: AgentPersona) -> None:
         self.persona = persona
         self.system_prompt = self._build_system_prompt()
+        self.model = genai.GenerativeModel(
+            'gemini-1.5-flash',
+            system_instruction=self.system_prompt
+        )

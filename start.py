@@ -29,6 +29,20 @@ server_thread = threading.Thread(target=server.serve_forever, daemon=True)
 server_thread.start()
 print(f"Status server started on port {PORT}", flush=True)
 
+# Handle Google Cloud credentials from env var (production)
+gcred_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+if gcred_json and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+    import tempfile, base64
+    try:
+        cred_content = base64.b64decode(gcred_json).decode('utf-8')
+    except Exception:
+        cred_content = gcred_json  # Already plain JSON
+    tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+    tmp.write(cred_content)
+    tmp.close()
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
+    print(f"Google Cloud credentials written to {tmp.name}", flush=True)
+
 # Now test imports one by one
 def check(name, code):
     try:
@@ -65,14 +79,14 @@ for name, code in [
     ("httpx", "import httpx"),
     ("gunicorn", "import gunicorn"),
     ("jwt", "import jwt"),
-    ("deepgram", "import deepgram"),
+    ("google_genai", "import google.genai"),
+    ("google_cloud_speech", "import google.cloud.speech_v2"),
+    ("google_cloud_tts", "import google.cloud.texttospeech"),
     ("app.config", "from app import config"),
     ("app.models.call_session", "from app.models import call_session"),
     ("app.models.voice_profile", "from app.models import voice_profile"),
     ("app.services.vonage_service", "from app.services import vonage_service"),
     ("app.services.conversation_service", "from app.services import conversation_service"),
-    ("app.services.elevenlabs_voice_synthesis", "from app.services.elevenlabs_service import voice_synthesis"),
-    ("app.services.elevenlabs_voice_cloning", "from app.services.elevenlabs_service import voice_cloning"),
     ("app.services.scheduler_service", "from app.services import scheduler_service"),
     ("app.services.call_logger_service", "from app.services import call_logger_service"),
     ("app.routes.health", "from app.routes import health"),
@@ -97,6 +111,8 @@ if all_ok:
         "gunicorn", "wsgi:app",
         "--bind", f"0.0.0.0:{PORT}",
         "--workers", "1",
+        "--threads", "4",
+        "--worker-class", "gthread",
         "--timeout", "120",
         "--access-logfile", "-",
         "--error-logfile", "-",

@@ -1,0 +1,48 @@
+# Version control
+.git
+.git.corrupted
+.github
+
+# Virtual environments
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Dev/test output files (NOT requirements.txt)
+*_output*.txt
+sim_output*.txt
+test_output*.txt
+call_output.txt
+all_files.txt
+build_output.txt
+build_list.txt
+test_results.txt
+deploy_output.txt
+webhook_result.txt
+verification.log
+
+# Media & keys
+*.mp3
+*.key
+
+# Environment & config (secrets stay out of image)
+.env
+.env.*
+
+# Nested projects & dev-only dirs
+ai-calling-agent/
+raincheck-landing/
+profiler/
+logs/
+temp_uploads/
+tests/
+scripts/
+
+# Docker build files
+.dockerignore
+Dockerfile.local
+docker-compose.yml
+

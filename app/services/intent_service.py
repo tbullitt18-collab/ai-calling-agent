@@ -1,24 +1,13 @@
 """
 Intent Detection Service for Rain Check.
-Uses OpenAI GPT to identify caller intents from speech.
+Uses Vertex AI Gemini to identify caller intents from speech.
 """
 
 import json
 import logging
 from dataclasses import dataclass
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
-
-_client = None
-
-
-def _get_client():
-    global _client
-    if _client is None:
-        from app.config import OPENAI_API_KEY
-        _client = OpenAI(api_key=OPENAI_API_KEY)
-    return _client
 
 
 @dataclass
@@ -57,7 +46,7 @@ RESPOND WITH ONLY THE JSON OBJECT. No other text."""
 
 def detect_intent(message: str, context: dict = None) -> IntentResult:
     """
-    Detect intent from a message.
+    Detect intent from a message using Gemini.
     
     Args:
         message: The user's spoken message
@@ -67,6 +56,8 @@ def detect_intent(message: str, context: dict = None) -> IntentResult:
         IntentResult with detected intent and entities
     """
     try:
+        from app.services.google_ai_service import gemini_chat
+
         messages = [{"role": "system", "content": INTENT_SYSTEM_PROMPT}]
         
         if context:
@@ -77,15 +68,14 @@ def detect_intent(message: str, context: dict = None) -> IntentResult:
         
         messages.append({"role": "user", "content": message})
         
-        response = _get_client().chat.completions.create(
-            model="gpt-4o-mini",
+        response_text = gemini_chat(
             messages=messages,
             max_tokens=200,
             temperature=0.1,
-            response_format={"type": "json_object"}
+            json_mode=True,
         )
         
-        result = json.loads(response.choices[0].message.content)
+        result = json.loads(response_text)
         
         return IntentResult(
             intent=result.get("intent", "unknown"),

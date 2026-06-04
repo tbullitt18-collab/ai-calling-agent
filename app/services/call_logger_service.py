@@ -1,26 +1,16 @@
 """
 Call Logger Service for Rain Check.
 Logs call transcripts, generates summaries, and stores in MongoDB.
-Uses OpenAI GPT for generating call summaries.
+Uses Vertex AI Gemini for generating call summaries.
 """
 
 import logging
 from datetime import datetime
 from typing import Optional
-from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
-_client = None
 _call_logger = None
-
-
-def _get_openai():
-    global _client
-    if _client is None:
-        from app.config import OPENAI_API_KEY
-        _client = OpenAI(api_key=OPENAI_API_KEY)
-    return _client
 
 
 def get_call_logger():
@@ -88,24 +78,25 @@ class CallLogger:
             return None
     
     def _generate_summary(self, transcript: list) -> str:
-        """Use OpenAI to summarize a call transcript."""
+        """Use Gemini to summarize a call transcript."""
         try:
+            from app.services.google_ai_service import gemini_chat
+
             text = "\n".join([
                 f"{'AI' if t.get('role') == 'assistant' else 'Manager'}: {t.get('content', '')}"
                 for t in transcript
             ])
             
-            response = _get_openai().chat.completions.create(
-                model="gpt-4o-mini",
+            response = gemini_chat(
                 messages=[
                     {"role": "system", "content": "Summarize this phone call transcript in 2-3 sentences. Focus on: reason for call, outcome, and any follow-up needed."},
                     {"role": "user", "content": text}
                 ],
                 max_tokens=150,
-                temperature=0.3
+                temperature=0.3,
             )
             
-            return response.choices[0].message.content.strip()
+            return response
             
         except Exception as e:
             logger.error(f"Summary generation error: {e}")

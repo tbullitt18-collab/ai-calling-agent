@@ -68,15 +68,20 @@ VONAGE_APPLICATION_ID = _get_env("VONAGE_APPLICATION_ID", "bed9794a-0f5b-4e51-a3
 VONAGE_PRIVATE_KEY_PATH = _resolve_private_key()
 VONAGE_NUMBER = _require_env("VONAGE_NUMBER")
 
-# ElevenLabs Configuration
-ELEVENLABS_API_KEY = _require_env("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = _require_env("ELEVENLABS_VOICE_ID")
-ELEVENLABS_MODEL_ID = _get_env("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
+# ElevenLabs Configuration (Voice Cloning & Synthesis)
+ELEVENLABS_API_KEY = _get_env('ELEVENLABS_API_KEY')
+ELEVENLABS_VOICE_ID = _get_env('ELEVENLABS_VOICE_ID')
+ELEVENLABS_MODEL_ID = _get_env('ELEVENLABS_MODEL_ID', 'eleven_multilingual_v2')
 
-# OpenAI Configuration
-OPENAI_API_KEY = _require_env("OPENAI_API_KEY")
+# Google Cloud / Vertex AI Configuration
+GOOGLE_CLOUD_PROJECT = _require_env("GOOGLE_CLOUD_PROJECT")
+GOOGLE_CLOUD_LOCATION = _get_env("GOOGLE_CLOUD_LOCATION", "us-central1")
+# GOOGLE_APPLICATION_CREDENTIALS is read automatically by Google client libraries
 
-# Deepgram Configuration (Speech-to-Text)
+# OpenAI Configuration (legacy — optional, only used if Gemini fallback needed)
+OPENAI_API_KEY = _get_env("OPENAI_API_KEY")
+
+# Deepgram Configuration (legacy — optional, replaced by Google Cloud STT)
 DEEPGRAM_API_KEY = _get_env("DEEPGRAM_API_KEY")
 
 # Database Configuration

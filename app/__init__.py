@@ -62,6 +62,8 @@ def create_app():
         from app.routes.session import session_bp
         from app.routes.api import api_bp
         from app.routes.auth import auth_bp
+        from app.routes.profile import profile_bp
+        from app.routes.mcp_routes import mcp_bp
         
         app.register_blueprint(health_bp)
         app.register_blueprint(audio_bp)
@@ -69,7 +71,9 @@ def create_app():
         app.register_blueprint(cloning_bp, url_prefix='/voices')
         app.register_blueprint(session_bp, url_prefix='/session')
         app.register_blueprint(api_bp, url_prefix='/api')
+        app.register_blueprint(profile_bp, url_prefix='/profile')
+        app.register_blueprint(mcp_bp, url_prefix='/api/mcp')
         
-        logger.info("Rain Check modular application initialized (Vonage + Claude + ElevenLabs).")
+        logger.info("Rain Check modular application initialized (Vonage + Vertex AI Gemini + Google Cloud).")
         
     return app

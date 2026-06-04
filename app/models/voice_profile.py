@@ -63,6 +63,22 @@ class VoiceProfile:
         """List all voices for a user."""
         return list(self.collection.find({"user_id": user_id}).sort("created_at", -1))
 
+    def update_profile(self, voice_id: str, updates: Dict) -> bool:
+        """Update voice profile fields (name, characteristics, etc.)."""
+        set_fields = {}
+        if 'name' in updates:
+            set_fields['name'] = updates['name']
+        if 'characteristics' in updates:
+            set_fields['characteristics'] = updates['characteristics']
+        if not set_fields:
+            return False
+        set_fields['updated_at'] = datetime.utcnow()
+        result = self.collection.update_one(
+            {"voice_id": voice_id},
+            {"$set": set_fields}
+        )
+        return result.modified_count > 0
+
     def update_characteristics(self, voice_id: str, characteristics: Dict) -> bool:
         """Update voice characteristics (e.g., tone, accent)."""
         result = self.collection.update_one(

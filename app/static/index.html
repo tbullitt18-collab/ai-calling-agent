@@ -12,112 +12,371 @@
 </head>
 
 <body>
-    <div class="container">
+    <!-- ── Display Name Gate (shown if no permanent name set) ── -->
+    <div id="nameGate" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); z-index: 200; display: none;">
+        <div style="max-width: 440px; margin: 15vh auto; padding: 2.5rem; background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">👤</div>
+            <h2 style="font-size: 1.5rem; color: #fff; text-transform: none; letter-spacing: -0.5px; margin-bottom: 0.5rem;">Welcome to Rain Check</h2>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 2rem; line-height: 1.5;">
+                Enter your <strong style="color: #fff;">real name</strong> — this is how your AI voice twin will identify itself on calls.<br>
+                When someone asks <em>"Who is this?"</em>, your clone will respond with this name.<br>
+                <strong style="color: #f85149;">⚠ This cannot be changed once set.</strong>
+            </p>
+            <div class="form-group" style="margin-bottom: 1.5rem; text-align: left; background: rgba(88, 166, 255, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid var(--accent-blue);">
+                <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; text-transform: none; color: white;">
+                    <input type="checkbox" id="nameGateConsent" style="width: auto; margin-top: 0.2rem;">
+                    <span style="font-size: 0.8rem; font-weight: 400; line-height: 1.4;">
+                        <strong>Privacy Acknowledgment:</strong> I understand that my display name, voice clone, and knowledge base will be processed by Rain Check to conduct calls on my behalf.
+                    </span>
+                </label>
+            </div>
+            <div class="form-group" style="text-align: left;">
+                <label>Display Name</label>
+                <input type="text" id="displayNameInput" placeholder="e.g. Todd Bullitt" minlength="2" maxlength="50">
+            </div>
+            <button class="btn" style="width: 100%; padding: 1rem; font-size: 1rem;" onclick="setDisplayName()">Lock In My Name</button>
+            <p id="nameGateError" style="color: #f85149; font-size: 0.8rem; margin-top: 1rem; min-height: 1.2rem;"></p>
+        </div>
+    </div>
+
+    <!-- ── Main Dashboard ── -->
+    <div class="container" id="mainDashboard">
         <header>
             <div class="logo">
                 <span class="drop">💧</span> Rain Check
             </div>
             <div style="display: flex; align-items: center; gap: 1rem;">
+                <span id="displayNameBadge" style="font-size: 0.8rem; color: var(--accent-purple); font-weight: 600;"></span>
                 <div class="status-pill">System Operational</div>
                 <button class="btn btn-outline" style="padding: 0.4rem 1rem; font-size: 0.75rem;"
                     onclick="logout()">Logout</button>
             </div>
         </header>
 
-        <div class="grid">
-            <!-- Voice Twins Panel -->
-            <div class="card">
-                <h2>Voice Twins</h2>
-                <div id="voiceList">
-                    <div class="voice-item">
-                        <div class="voice-info">
-                            <h3>Loading voices...</h3>
+        <!-- ── Tab Navigation ── -->
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 2rem;">
+            <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📞 Dashboard</button>
+            <button class="tab-btn" data-tab="knowledge" onclick="switchTab('knowledge')">🧠 Knowledge Base</button>
+            <button class="tab-btn" data-tab="setup" onclick="switchTab('setup')">⚙️ Setup</button>
+            <button class="tab-btn" data-tab="voices" onclick="switchTab('voices')">🎙️ Voice Profiles</button>
+        </div>
+
+        <!-- ════════════ DASHBOARD TAB ════════════ -->
+        <div class="tab-content active" id="tab-dashboard">
+            <div class="grid">
+                <!-- Voice Twins Panel -->
+                <div class="card">
+                    <h2>Voice Twins</h2>
+                    <div id="voiceList">
+                        <div class="voice-item">
+                            <div class="voice-info">
+                                <h3>Loading voices...</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button class="btn" style="flex: 1;" onclick="showCloneModal()">+ ElevenLabs Voice Clone</button>
+                    </div>
+                </div>
+
+                <!-- Call Scheduler Panel -->
+                <div class="card scheduler-card">
+                    <h2>Schedule Call-Out</h2>
+                    <div class="form-group">
+                        <label>Manager's Number</label>
+                        <div style="display: flex; align-items: center; gap: 0;">
+                            <span style="background: rgba(88,166,255,0.1); border: 1px solid var(--glass-border); border-right: none; padding: 0.8rem 0.6rem; border-radius: 8px 0 0 8px; color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">+1</span>
+                            <input type="tel" id="managerNumber" placeholder="(555) 123-4567" maxlength="14" style="border-radius: 0 8px 8px 0;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Call Time (24h)</label>
+                        <input type="time" id="callTime" value="06:00">
+                    </div>
+                    <div class="form-group">
+                        <label>Reason for Absence</label>
+                        <select id="callReason"
+                            style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white;">
+                            <option value="Sick Day">Sick Day</option>
+                            <option value="Mental Health Day">Mental Health Day</option>
+                            <option value="Personal Emergency">Personal Emergency</option>
+                            <option value="Running Late">Running Late</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Additional Notes (Handover, etc.)</label>
+                        <textarea id="callNotes" rows="3"
+                            style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white; resize: none;"
+                            placeholder="e.g. My keys are under the mat, tell them I'll be in at 10 AM."></textarea>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                        <button class="btn" style="flex: 1;" onclick="scheduleCall()">Schedule</button>
+                        <button class="btn btn-outline" style="flex: 1;" onclick="callNow()">Call Now</button>
+                    </div>
+
+                    <h2 style="margin-top: 2rem;">Upcoming Calls</h2>
+                    <div id="upcomingCalls">
+                        <p style="color: var(--text-secondary); font-size: 0.8rem;">No calls scheduled.</p>
+                    </div>
+                    
+                    <!-- MCP Activity Feed -->
+                    <h2 style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>🧠 MCP Activity</span>
+                        <span style="font-size: 0.7rem; font-weight: normal; background: rgba(88,166,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; color: var(--accent-blue);">Live</span>
+                    </h2>
+                    <div id="mcpActivityList" style="background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 12px; padding: 1rem; max-height: 200px; overflow-y: auto;">
+                        <p style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; margin: 1rem 0;">No knowledge base queries yet.<br>Activity will appear here during live calls.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ════════════ KNOWLEDGE BASE TAB ════════════ -->
+        <div class="tab-content" id="tab-knowledge">
+            <div class="grid">
+                <div class="card" style="grid-column: span 2;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
+                        <div>
+                            <h2>🧠 Personal Knowledge Base (MongoDB)</h2>
+                            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
+                                Your AI twin uses Gemini Function Calling to query this MongoDB data in real-time during calls. 
+                                Add your FAQs, schedule, and contacts so it can answer questions accurately.
+                            </p>
+                        </div>
+                        <button class="btn btn-outline" style="white-space: nowrap;" onclick="seedDemoData()">Seed Demo Data</button>
+                    </div>
+
+                    <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                        <!-- FAQs Column -->
+                        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border: 1px solid var(--glass-border);">
+                            <h3 style="margin-bottom: 1rem; font-size: 1rem;">FAQs</h3>
+                            <div id="faqList" style="margin-bottom: 1rem; max-height: 300px; overflow-y: auto;">
+                                <p style="color: var(--text-secondary); font-size: 0.8rem;">Loading...</p>
+                            </div>
+                            <div style="border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+                                <input type="text" id="newFaqQ" placeholder="Question (e.g., What's your email?)" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.6rem;">
+                                <input type="text" id="newFaqA" placeholder="Answer (e.g., todd@example.com)" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.6rem;">
+                                <button class="btn btn-sm" style="width: 100%;" onclick="addFaq()">+ Add FAQ</button>
+                            </div>
+                        </div>
+
+                        <!-- Calendar Column -->
+                        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border: 1px solid var(--glass-border);">
+                            <h3 style="margin-bottom: 1rem; font-size: 1rem;">Calendar</h3>
+                            <div id="calendarList" style="margin-bottom: 1rem; max-height: 300px; overflow-y: auto;">
+                                <p style="color: var(--text-secondary); font-size: 0.8rem;">Loading...</p>
+                            </div>
+                            <div style="border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+                                <input type="text" id="newCalTitle" placeholder="Event (e.g., Team Standup)" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.6rem;">
+                                <input type="text" id="newCalDate" placeholder="Date/Time (e.g., 9:00 AM Today)" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.6rem;">
+                                <button class="btn btn-sm" style="width: 100%;" onclick="addCalendarEvent()">+ Add Event</button>
+                            </div>
+                        </div>
+
+                        <!-- Contacts Column -->
+                        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; border: 1px solid var(--glass-border);">
+                            <h3 style="margin-bottom: 1rem; font-size: 1rem;">Contacts</h3>
+                            <div id="contactList" style="margin-bottom: 1rem; max-height: 300px; overflow-y: auto;">
+                                <p style="color: var(--text-secondary); font-size: 0.8rem;">Loading...</p>
+                            </div>
+                            <div style="border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+                                <input type="text" id="newContactName" placeholder="Name (e.g., Sarah Johnson)" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.6rem;">
+                                <input type="text" id="newContactRole" placeholder="Role (e.g., Manager)" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.6rem;">
+                                <button class="btn btn-sm" style="width: 100%;" onclick="addContact()">+ Add Contact</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                    <button class="btn" style="flex: 1;" onclick="showCloneModal()">+ New Clone</button>
-                    <button class="btn btn-outline" style="flex: 1;" onclick="showLinkModal()">🔗 Link Existing</button>
+            </div>
+        </div>
+
+        <!-- ════════════ SETUP TAB ════════════ -->
+        <div class="tab-content" id="tab-setup">
+            <div class="grid">
+                <div class="card" style="grid-column: span 2;">
+                    <h2>⚙️ Workplace Setup</h2>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 2rem;">
+                        Set up your work details so your AI twin has all the context it needs. This information helps your twin sound authentic during calls.
+                    </p>
+                    <div class="grid" style="gap: 1.5rem;">
+                        <div>
+                            <div class="form-group">
+                                <label>Employee ID</label>
+                                <input type="text" id="setupEmployeeId" placeholder="e.g. EMP-20415">
+                            </div>
+                            <div class="form-group">
+                                <label>Company Name</label>
+                                <input type="text" id="setupCompanyName" placeholder="e.g. Walmart, Target, UPS">
+                            </div>
+                            <div class="form-group">
+                                <label>Department</label>
+                                <input type="text" id="setupDepartment" placeholder="e.g. Warehouse, Front End, Sales">
+                            </div>
+                            <div class="form-group">
+                                <label>Position / Title</label>
+                                <input type="text" id="setupPosition" placeholder="e.g. Associate, Shift Lead">
+                            </div>
+                            <div class="form-group">
+                                <label>Location</label>
+                                <input type="text" id="setupLocation" placeholder="e.g. Store #4122, Warehouse B">
+                            </div>
+                        </div>
+                        <div>
+                            <div class="form-group">
+                                <label>Manager's Name</label>
+                                <input type="text" id="setupManagerName" placeholder="e.g. Sarah Johnson">
+                            </div>
+                            <div class="form-group">
+                                <label>Manager's Phone Number</label>
+                                <div style="display: flex; align-items: center; gap: 0;">
+                                    <span style="background: rgba(88,166,255,0.1); border: 1px solid var(--glass-border); border-right: none; padding: 0.8rem 0.6rem; border-radius: 8px 0 0 8px; color: var(--accent-blue); font-weight: 600; font-size: 0.9rem;">+1</span>
+                                    <input type="tel" id="setupManagerNumber" placeholder="(555) 123-4567" maxlength="14" style="border-radius: 0 8px 8px 0;">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Shift Start Time</label>
+                                <input type="time" id="setupShiftStart" value="09:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Shift End Time</label>
+                                <input type="time" id="setupShiftEnd" value="17:00">
+                            </div>
+                            <div class="form-group">
+                                <label>Work Days</label>
+                                <div id="workDaysSelector" style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                                    <button type="button" class="day-btn" data-day="Mon" onclick="toggleDay(this)">Mon</button>
+                                    <button type="button" class="day-btn" data-day="Tue" onclick="toggleDay(this)">Tue</button>
+                                    <button type="button" class="day-btn" data-day="Wed" onclick="toggleDay(this)">Wed</button>
+                                    <button type="button" class="day-btn" data-day="Thu" onclick="toggleDay(this)">Thu</button>
+                                    <button type="button" class="day-btn" data-day="Fri" onclick="toggleDay(this)">Fri</button>
+                                    <button type="button" class="day-btn" data-day="Sat" onclick="toggleDay(this)">Sat</button>
+                                    <button type="button" class="day-btn" data-day="Sun" onclick="toggleDay(this)">Sun</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Additional Notes</label>
+                                <textarea id="setupNotes" rows="2"
+                                    style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white; resize: none;"
+                                    placeholder="e.g. I usually park in Lot C, locker #218"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                        <button class="btn" style="flex: 1;" onclick="saveSetup()">💾 Save Setup</button>
+                    </div>
+                    <p id="setupStatus" style="color: var(--accent-blue); font-size: 0.8rem; margin-top: 1rem; min-height: 1.2rem; text-align: center;"></p>
                 </div>
             </div>
+        </div>
 
-            <!-- Call Scheduler Panel -->
-            <div class="card scheduler-card">
-                <h2>Schedule Call-Out</h2>
-                <div class="form-group">
-                    <label>Manager's Number</label>
-                    <input type="text" id="managerNumber" placeholder="+1234567890">
-                </div>
-                <div class="form-group">
-                    <label>Call Time (24h)</label>
-                    <input type="time" id="callTime" value="06:00">
-                </div>
-                <div class="form-group">
-                    <label>Reason for Absence</label>
-                    <select id="callReason"
-                        style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white;">
-                        <option value="Sick Day">Sick Day</option>
-                        <option value="Mental Health Day">Mental Health Day</option>
-                        <option value="Personal Emergency">Personal Emergency</option>
-                        <option value="Running Late">Running Late</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Additional Notes (Handover, etc.)</label>
-                    <textarea id="callNotes" rows="3"
-                        style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white; resize: none;"
-                        placeholder="e.g. My keys are under the mat, tell them I'll be in at 10 AM."></textarea>
-                </div>
-                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                    <button class="btn" style="flex: 1;" onclick="scheduleCall()">Schedule</button>
-                    <button class="btn btn-outline" style="flex: 1;" onclick="callNow()">Call Now</button>
-                </div>
-
-
-
-                <h2 style="margin-top: 2rem;">Upcoming Calls</h2>
-                <div id="upcomingCalls">
-                    <p style="color: var(--text-secondary); font-size: 0.8rem;">No calls scheduled.</p>
+        <!-- ════════════ VOICES TAB ════════════ -->
+        <div class="tab-content" id="tab-voices">
+            <div class="card" style="max-width: 700px;">
+                <h2>🎙️ Manage Voice Profiles</h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+                    Edit, rename, or manage your cloned voice profiles here.
+                </p>
+                <div id="voiceEditList">
+                    <p style="color: var(--text-secondary); font-size: 0.8rem;">Loading voice profiles...</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Clone Modal Placeholder -->
+    <!-- ── Clone Modal ── -->
     <div id="cloneModal"
-        style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-color); padding: 2rem; border-radius: 20px; border: 1px solid var(--accent-blue); z-index: 100; width: 400px;">
-        <h2>Create Voice Twin</h2>
-        <div class="form-group">
-            <label>Voice Name</label>
-            <input type="text" id="voiceName" placeholder="My Professional Twin">
-        </div>
-        <div class="form-group">
-            <label>Upload Samples (5+ mins recommended)</label>
-            <input type="file" id="voiceFiles" multiple>
-        </div>
-        <button class="btn" onclick="startCloning()">Start Synthesis</button>
-        <button class="btn btn-outline" onclick="hideCloneModal()">Cancel</button>
-    </div>
-
-    <!-- Link Existing Modal -->
-    <div id="linkModal"
-        style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-color); padding: 2rem; border-radius: 20px; border: 1px solid var(--accent-blue); z-index: 101; width: 400px; box-shadow: 0 0 50px rgba(0,0,0,0.5);">
-        <h2>Link ElevenLabs Voice</h2>
+        style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-color); padding: 2rem; border-radius: 20px; border: 1px solid var(--accent-blue); z-index: 100; width: 450px; box-shadow: 0 0 50px rgba(0,0,0,0.5);">
+        <h2>ElevenLabs Instant Voice Clone</h2>
         <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
-            Find your Voice ID in the <a href="https://elevenlabs.io/app/voice-lab" target="_blank"
-                style="color: var(--accent-blue);">ElevenLabs Voice Lab</a>.
+            Clone your voice instantly using ElevenLabs' advanced speech synthesis.
         </p>
         <div class="form-group">
-            <label>Friendly Name</label>
-            <input type="text" id="linkName" placeholder="e.g. My Personal Assistant">
+            <label>Voice Profile Name</label>
+            <input type="text" id="voiceName" placeholder="e.g. My Professional Voice">
         </div>
         <div class="form-group">
-            <label>ElevenLabs Voice ID</label>
-            <input type="text" id="linkVoiceId" placeholder="e.g. pMsXgVXv3BLzUgS... ">
+            <label>Upload High-Quality Samples</label>
+            <input type="file" id="voiceFiles" multiple accept="audio/wav">
         </div>
-        <button class="btn" onclick="linkVoice()">Link Voice</button>
-        <button class="btn btn-outline" onclick="hideLinkModal()">Cancel</button>
+        <div class="form-group" style="margin-top: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border);">
+            <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; text-transform: none; color: white;">
+                <input type="checkbox" id="consentCheck" style="width: auto; margin-top: 0.2rem;">
+                <span style="font-size: 0.8rem; font-weight: 400;">
+                    <strong>Required Consent:</strong> I explicitly consent to ElevenLabs and Rain Check processing these audio samples to create a synthetic voice model of my voice. I confirm I am the speaker in these recordings or have explicit legal rights to them.
+                </span>
+            </label>
+        </div>
+        <button class="btn" style="width: 100%; margin-top: 1rem;" onclick="startCloning()">Create Voice Clone</button>
+        <button class="btn btn-outline" style="width: 100%; margin-top: 0.5rem;" onclick="hideCloneModal()">Cancel</button>
     </div>
+
+    <!-- ── Edit Voice Modal ── -->
+    <div id="editVoiceModal"
+        style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-color); padding: 2rem; border-radius: 20px; border: 1px solid var(--accent-purple); z-index: 102; width: 420px; box-shadow: 0 0 50px rgba(0,0,0,0.5);">
+        <h2 style="color: var(--accent-purple);">✏️ Edit Voice Profile</h2>
+        <input type="hidden" id="editVoiceId">
+        <div class="form-group">
+            <label>Voice Name</label>
+            <input type="text" id="editVoiceName" placeholder="Updated name">
+        </div>
+        <div class="form-group">
+            <label>Tone</label>
+            <select id="editVoiceTone"
+                style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white;">
+                <option value="unknown">Unknown</option>
+                <option value="professional">Professional</option>
+                <option value="casual">Casual</option>
+                <option value="tired">Tired / Sick</option>
+                <option value="urgent">Urgent</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Delivery Style</label>
+            <select id="editVoiceDelivery"
+                style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white;">
+                <option value="natural">Natural</option>
+                <option value="calm">Calm</option>
+                <option value="empathetic">Empathetic</option>
+                <option value="matter-of-fact">Matter of Fact</option>
+            </select>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <button class="btn" style="flex:1;" onclick="saveVoiceEdit()">Save Changes</button>
+            <button class="btn btn-outline" style="flex:1;" onclick="hideEditModal()">Cancel</button>
+        </div>
+        <p id="editVoiceError" style="color: #f85149; font-size: 0.8rem; margin-top: 1rem; min-height: 1.2rem; text-align: center;"></p>
+    </div>
+
+    <!-- ── Modal Overlay ── -->
+    <div id="modalOverlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.6); z-index: 99;" onclick="closeAllModals()"></div>
+
+    <!-- ── Privacy Modal ── -->
+    <div id="privacyModal"
+        style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-color); padding: 2.5rem; border-radius: 20px; border: 1px solid var(--glass-border); z-index: 205; width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 50px rgba(0,0,0,0.8);">
+        <h2 style="margin-bottom: 1rem;">Privacy & Security Policy</h2>
+        <div style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6;">
+            <p style="margin-bottom: 1rem;">At Rain Check, your privacy and data security are our highest priorities. This hackathon prototype is built with a security-first architecture.</p>
+            
+            <h3 style="color: white; margin-top: 1.5rem; margin-bottom: 0.5rem;">Data Handling & Storage</h3>
+            <ul style="margin-left: 1.5rem; margin-bottom: 1rem;">
+                <li><strong>Voice Cloning:</strong> Voice models are securely generated via ElevenLabs API. We do not persist raw audio uploads after the cloning process completes.</li>
+                <li><strong>Knowledge Base:</strong> Your FAQs, schedule, and contacts are stored securely in MongoDB Atlas and only accessed when you schedule a call.</li>
+                <li><strong>Call Audio:</strong> Live call audio streams securely via Vonage WebSockets and Google Cloud Speech-to-Text. We do not record or retain the audio of your calls.</li>
+            </ul>
+
+            <h3 style="color: white; margin-top: 1.5rem; margin-bottom: 0.5rem;">AI Processing</h3>
+            <p style="margin-bottom: 1rem;">Your context data is processed by Google Vertex AI (Gemini) solely for the purpose of navigating your phone call. Your personal data is <strong>never</strong> used to train Google's foundation models.</p>
+
+            <h3 style="color: white; margin-top: 1.5rem; margin-bottom: 0.5rem;">Consent & Deletion</h3>
+            <p style="margin-bottom: 1rem;">You retain full control over your data. Deleting your voice profile or knowledge base items removes them from our systems and third-party APIs immediately.</p>
+        </div>
+        <button class="btn" style="width: 100%; margin-top: 1.5rem;" onclick="hidePrivacyModal()">Close</button>
+    </div>
+
+    <footer style="text-align: center; margin-top: 4rem; margin-bottom: 2rem; font-size: 0.8rem; color: var(--text-secondary);">
+        Rain Check &copy; 2026. Built for the Google Cloud Rapid Agent Hackathon.<br>
+        <a href="#" onclick="showPrivacyModal(); return false;" style="color: var(--accent-blue); text-decoration: none; margin-top: 0.5rem; display: inline-block;">Privacy & Security Policy</a>
+    </footer>
 
     <script src="/static/js/app.js"></script>
 

@@ -1,0 +1,8 @@
+﻿App ID: bed9794a-0f5b-4e51-a32c-3b751f5f292a
+Answer URL: https://raincheck-api-562927333515.us-central1.run.app/webhook/answer
+Event URL:  https://raincheck-api-562927333515.us-central1.run.app/webhook/events
+
+Status: 200
+Answer: https://raincheck-api-562927333515.us-central1.run.app/webhook/answer
+Events: https://raincheck-api-562927333515.us-central1.run.app/webhook/events
+SUCCESS: Webhooks updated!

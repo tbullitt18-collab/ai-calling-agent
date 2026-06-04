@@ -1,0 +1,120 @@
+﻿python.exe : Creating 
+temporary archive of 
+91 file(s) totalling 
+862.8 KiB before 
+compression.
+At C:\Users\tbull\AppD
+ata\Local\Google\Cloud
+ SDK\google-cloud-sdk\
+bin\gcloud.ps1:114 
+char:3
++   & 
+"$cloudsdk_python" 
+$run_args_array
++   ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (Creating t   
+ empor...re compre    
+ssion.:String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+Some files were not 
+included in the 
+source upload.
+
+Check the gcloud log [
+C:\Users\tbull\AppData
+\Roaming\gcloud\logs\2
+026.03.06\20.55.38.928
+633.log] to see which 
+files and the 
+contents of the
+default gcloudignore 
+file used (see `$ 
+gcloud topic 
+gcloudignore` to learn
+more).
+
+Uploading tarball of 
+[.] to [gs://raincheck
+-prod-2026_cloudbuild/
+source/1772848539.5267
+83-b7ccafe100b340b9845
+76055ccba807c.tgz]
+Created [https://cloud
+build.googleapis.com/v
+1/projects/raincheck-p
+rod-2026/locations/glo
+bal/builds/08f7bbf6-4c
+10-44fe-b796-647649b41
+4ce].
+Logs are available at 
+[ https://console.clou
+d.google.com/cloud-bui
+ld/builds/08f7bbf6-4c1
+0-44fe-b796-647649b414
+ce?project=56292733351
+5 ].
+Waiting for build to 
+complete. Polling 
+interval: 1 second(s).
+
+BUILD FAILURE: Build 
+step failure: build 
+step 0 "gcr.io/cloud-b
+uilders/gcb-internal" 
+failed: step exited 
+with non-zero status: 
+1
+ERROR: (gcloud.builds.
+submit) build 08f7bbf6
+-4c10-44fe-b796-647649
+b414ce completed with 
+status "FAILURE"
+----------------------------- REMOTE BUILD OUTPUT ------------------------------
+starting build "08f7bbf6-4c10-44fe-b796-647649b414ce"
+
+FETCHSOURCE
+Fetching storage object: gs://raincheck-prod-2026_cloudbuild/source/1772848539.526783-b7ccafe100b340b984576055ccba807c.tgz#1772848540519078
+Copying gs://raincheck-prod-2026_cloudbuild/source/1772848539.526783-b7ccafe100b340b984576055ccba807c.tgz#1772848540519078...
+/ [0 files][    0.0 B/ 84.4 KiB]                                                
+/ [1 files][ 84.4 KiB/ 84.4 KiB]                                                
+
+Operation completed over 1 objects/84.4 KiB.
+BUILD
+Already have image (with digest): gcr.io/cloud-builders/gcb-internal
+Sending build context to Docker daemon  293.4kB
+
+
+Step 1/8 : FROM python:3.12-slim
+3.12-slim: Pulling from library/python
+206356c42440: Already exists
+30dad65d3b24: Pulling fs layer
+5d7ccc6599a6: Pulling fs layer
+b9aab63c297c: Pulling fs layer
+30dad65d3b24: Verifying Checksum
+b9aab63c297c: Verifying Checksum
+b9aab63c297c: Download complete
+30dad65d3b24: Download complete
+5d7ccc6599a6: Verifying Checksum
+5d7ccc6599a6: Download complete
+30dad65d3b24: Pull complete
+5d7ccc6599a6: Pull complete
+b9aab63c297c: Pull complete
+Digest: sha256:ccc7089399c8bb65dd1fb3ed6d55efa538a3f5e7fca3f5988ac3b5b87e593bf0
+Status: Downloaded newer image for python:3.12-slim
+ ---> 6f90d4a79e7a
+Step 2/8 : WORKDIR /app
+ ---> Running in 3e427a15aa1f
+Removing intermediate container 3e427a15aa1f
+ ---> 0f5864a735f8
+Step 3/8 : COPY requirements.txt .
+COPY failed: file not found in build context or excluded by .dockerignore: stat requirements.txt: file does not exist
+ERROR
+ERROR: build step 0 "gcr.io/cloud-builders/gcb-internal" failed: step exited with non-zero status: 1
+--------------------------------------------------------------------------------

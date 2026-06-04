@@ -1,6 +1,6 @@
 """
 Vonage Audio Streaming and Webhook routes for Rain Check.
-Bridges Vonage WebSocket ↔ Claude (conversation) ↔ ElevenLabs (TTS).
+Bridges Vonage WebSocket ↔ Gemini (conversation) ↔ Google TTS / ElevenLabs.
 """
 
 import json
@@ -8,6 +8,7 @@ import struct
 import logging
 import asyncio
 import io
+import time
 from flask import Blueprint, request, jsonify
 from app import sock
 from app.services.vonage_service import generate_answer_ncco, generate_error_ncco
@@ -146,9 +147,94 @@ def media_stream(ws, call_uuid: str):
     notes = context.get('notes', '')
     voice_id = context.get('voice_id')
     
-    # Build persona with call context
+    # Track the authenticated user for MongoDB MCP queries
+    call_user_id = context.get('user_id', 'default')
+    
+    # Load the user's permanent display name for AI identity.
+    # This is who the AI says it is when asked "Who is this?"
+    represented_user = "the user"
+    
+    # First try: get the permanent display name from user_profiles
+    try:
+        from app.models.user_profile import UserProfile
+        user_profile_model = UserProfile()
+        # Find by the voice_id's owner (look up the voice profile to get user_id)
+        if voice_id:
+            from app.models.voice_profile import VoiceProfile
+            vp_model = VoiceProfile()
+            voice_prof = vp_model.get_profile(voice_id)
+            if voice_prof:
+                owner_username = voice_prof.get('user_id', 'default')
+                user_prof = user_profile_model.get_profile(owner_username)
+                if user_prof and user_prof.get('display_name'):
+                    represented_user = user_prof['display_name']
+                    logger.info(f"Using permanent display name: {represented_user}")
+    except Exception as e:
+        logger.warning(f"Failed to load display name: {e}")
+    
+    # Fallback: if no display name found, use voice profile name
+    if represented_user == "the user" and voice_id:
+        try:
+            from app.models.voice_profile import VoiceProfile
+            profile_model = VoiceProfile()
+            prof = profile_model.get_profile(voice_id)
+            if prof and prof.get('name'):
+                represented_user = prof.get('name')
+        except Exception as e:
+            logger.warning(f"Failed to load profile name for {voice_id}: {e}")
+
+    # Load workplace setup to give AI twin factual context
+    setup_context = ""
+    try:
+        if represented_user != "the user":
+            from app.models.user_profile import UserProfile
+            _up_model = UserProfile()
+            # Find by voice owner or by the resolved username
+            _owner = None
+            if voice_id:
+                from app.models.voice_profile import VoiceProfile
+                _vp = VoiceProfile()
+                _vprof = _vp.get_profile(voice_id)
+                if _vprof:
+                    _owner = _vprof.get('user_id', 'default')
+            if _owner:
+                _up = _up_model.get_profile(_owner)
+                if _up and _up.get('setup'):
+                    setup = _up['setup']
+                    parts = []
+                    if setup.get('employee_id'):
+                        parts.append(f"Employee ID: {setup['employee_id']}")
+                    if setup.get('company_name'):
+                        parts.append(f"Company: {setup['company_name']}")
+                    if setup.get('department'):
+                        parts.append(f"Department: {setup['department']}")
+                    if setup.get('position'):
+                        parts.append(f"Position: {setup['position']}")
+                    if setup.get('manager_name'):
+                        parts.append(f"Manager's name: {setup['manager_name']}")
+                    if setup.get('shift_start') and setup.get('shift_end'):
+                        parts.append(f"Shift: {setup['shift_start']} - {setup['shift_end']}")
+                    if setup.get('work_days'):
+                        parts.append(f"Work days: {', '.join(setup['work_days'])}")
+                    if parts:
+                        setup_context = " | ".join(parts)
+                        logger.info(f"Loaded workplace setup for call context")
+    except Exception as e:
+        logger.warning(f"Failed to load workplace setup: {e}")
+
+    # Build persona with call context + workplace setup
+    full_context = f"You are calling to report: {reason}. "
+    if setup_context:
+        full_context += f"YOUR WORKPLACE INFO (use when asked): {setup_context}. "
+    full_context += (
+        f"CRITICAL MEMORY FILES/NOTES: '{notes}'. "
+        f"If you are asked any specific factual questions (like your employee ID, shift details, or return date), strictly reference your workplace info and notes. "
+        f"Be brief and professional."
+    )
+
     persona = AgentPersona(
-        custom_instructions=f"You are calling to report: {reason}. Additional context: {notes}. Be brief and professional."
+        represented_user=represented_user,
+        custom_instructions=full_context
     )
     engine = ConversationEngine(persona=persona)
     conversation_history = []
@@ -156,6 +242,11 @@ def media_stream(ws, call_uuid: str):
     # Speech state machine
     audio_buffer = bytearray()
     is_speaking = False  # True when we've detected speech and are buffering
+    
+    # Echo suppression: after sending TTS audio, ignore incoming audio
+    # for the duration of playback + margin so the AI doesn't hear itself
+    echo_suppress_until = 0.0  # timestamp when suppression ends
+    ECHO_MARGIN_SECS = 0.4     # extra margin after TTS playback ends
     
     # Thresholds
     SPEECH_THRESHOLD = 0.015   # RMS above this = speech detected
@@ -176,6 +267,11 @@ def media_stream(ws, call_uuid: str):
             # Vonage sends binary PCM audio or text control messages
             if isinstance(message, bytes):
                 chunk = message
+                
+                # ── Echo suppression: drop audio while our own TTS is playing ──
+                if time.time() < echo_suppress_until:
+                    continue
+                
                 buf_secs = len(audio_buffer) / (16000 * 2)
                 
                 if not is_speaking:
@@ -205,17 +301,23 @@ def media_stream(ws, call_uuid: str):
                         should_process = True
                     
                     if should_process:
-                        # Transcribe audio using Deepgram STT
-                        logger.info("Sending to Deepgram STT...")
+                        # Transcribe audio using Google Cloud STT
+                        logger.info("Sending to Google STT...")
                         manager_text = _transcribe_audio(audio_buffer)
                         
                         if manager_text:
                             logger.info(f"STT result: '{manager_text}' — sending to GPT...")
-                            _send_tts_response(
+                            tts_bytes_sent = _send_tts_response(
                                 ws, None, voice_id, engine, 
                                 conversation_history, call_uuid,
-                                user_message=manager_text
+                                user_message=manager_text,
+                                user_id=call_user_id
                             )
+                            # Set echo suppression window based on TTS playback length
+                            if tts_bytes_sent and tts_bytes_sent > 0:
+                                playback_secs = tts_bytes_sent / (16000 * 2)
+                                echo_suppress_until = time.time() + playback_secs + ECHO_MARGIN_SECS
+                                logger.info(f"Echo suppression active for {playback_secs + ECHO_MARGIN_SECS:.1f}s")
                         else:
                             logger.info("STT returned empty — skipping (likely background noise)")
                         
@@ -230,6 +332,53 @@ def media_stream(ws, call_uuid: str):
                     event = data.get('event')
                     if event == 'websocket:connected':
                         logger.info("Vonage WebSocket handshake complete")
+                        
+                        # Generate natural-sounding opening line
+                        import random
+                        
+                        name = represented_user if represented_user != "the user" else ""
+                        
+                        if reason and reason.lower() not in ('calling in', 'none', ''):
+                            # Calling with a specific reason — sound like a real person
+                            reason_lower = reason.lower()
+                            openers = [
+                                f"Hey, it's {name}. So um, I'm calling because I need to take a {reason_lower}.",
+                                f"Hi, yeah this is {name}. I wanted to let you know I gotta call out — {reason_lower}.",
+                                f"Hey it's {name}. Um, so I'm not gonna be able to make it in today, {reason_lower}.",
+                                f"Hi, this is {name} — yeah so I need to take a {reason_lower} today.",
+                            ] if name else [
+                                f"Hey, um, I'm calling to let you know I need a {reason_lower}.",
+                                f"Hi yeah, so I wanted to call and say I gotta take a {reason_lower}.",
+                            ]
+                        else:
+                            # Generic call — casual opener
+                            openers = [
+                                f"Hey, it's {name}. Can you hear me alright?",
+                                f"Hi, yeah this is {name}. Hey, so um —",
+                                f"Hey it's {name}, how's it going?",
+                            ] if name else [
+                                "Hey, can you hear me okay?",
+                                "Hi, yeah — hey, so um —",
+                            ]
+                        
+                        initial_greeting = random.choice(openers)
+                        logger.info(f"Sending natural initial greeting: {initial_greeting}")
+                        
+                        # Add to history so AI remembers it spoke first
+                        conversation_history.append({"role": "assistant", "content": initial_greeting})
+                        if call_uuid:
+                            session_manager.add_turn(call_uuid, "assistant", initial_greeting)
+                            
+                        # Send the greeting out to the user's phone
+                        tts_bytes_sent = _send_tts_response(
+                            ws, text=initial_greeting, voice_id=voice_id,
+                            engine=None, conversation_history=None, call_uuid=None
+                        )
+                        # Suppress echo for the duration of the greeting playback
+                        if tts_bytes_sent and tts_bytes_sent > 0:
+                            playback_secs = tts_bytes_sent / (16000 * 2)
+                            echo_suppress_until = time.time() + playback_secs + ECHO_MARGIN_SECS
+                            logger.info(f"Greeting echo suppression for {playback_secs + ECHO_MARGIN_SECS:.1f}s")
                     elif event == 'websocket:disconnected':
                         logger.info("Vonage WebSocket disconnected")
                         break
@@ -244,9 +393,9 @@ def media_stream(ws, call_uuid: str):
 
 def _transcribe_audio(audio_buffer: bytearray) -> str:
     """
-    Transcribe audio using Deepgram Speech-to-Text API.
+    Transcribe audio using Google Cloud Speech-to-Text.
     
-    Sends PCM 16kHz 16-bit audio to Deepgram's pre-recorded endpoint
+    Sends PCM 16kHz 16-bit audio to Google Cloud STT
     and returns the transcription text.
     
     Args:
@@ -255,63 +404,8 @@ def _transcribe_audio(audio_buffer: bytearray) -> str:
     Returns:
         Transcribed text, or None if transcription failed/empty
     """
-    from app.config import DEEPGRAM_API_KEY
-    
-    duration_seconds = len(audio_buffer) / (16000 * 2)  # 16kHz, 16-bit
-    
-    if duration_seconds < 0.5:
-        return None
-    
-    if not DEEPGRAM_API_KEY:
-        logger.warning("DEEPGRAM_API_KEY not set — cannot transcribe audio")
-        return None
-    
-    try:
-        import requests as req
-        
-        # Send raw PCM audio to Deepgram's pre-recorded endpoint
-        response = req.post(
-            "https://api.deepgram.com/v1/listen",
-            headers={
-                "Authorization": f"Token {DEEPGRAM_API_KEY}",
-                "Content-Type": "application/octet-stream",
-            },
-            params={
-                "model": "nova-2",
-                "language": "en",
-                "smart_format": "true",
-                "punctuate": "true",
-                "encoding": "linear16",
-                "sample_rate": 16000,
-                "channels": 1,
-            },
-            data=bytes(audio_buffer),
-            timeout=10,
-        )
-        
-        if response.status_code != 200:
-            logger.error(f"Deepgram STT error: {response.status_code} {response.text[:200]}")
-            return None
-        
-        result = response.json()
-        transcript = (
-            result.get("results", {})
-            .get("channels", [{}])[0]
-            .get("alternatives", [{}])[0]
-            .get("transcript", "")
-            .strip()
-        )
-        
-        if transcript:
-            logger.info(f"Deepgram STT ({duration_seconds:.1f}s audio): \"{transcript}\"")
-            return transcript
-        else:
-            logger.info(f"Deepgram STT: empty transcript ({duration_seconds:.1f}s audio)")
-            return None
-            
-    except Exception as e:
-        logger.error(f"Deepgram STT error: {e}")
-        return None
+    from app.services.google_ai_service import transcribe_audio
+    return transcribe_audio(bytes(audio_buffer))
 
 
 def _send_tts_response(
@@ -321,27 +415,30 @@ def _send_tts_response(
     engine: ConversationEngine = None,
     conversation_history: list = None,
     call_uuid: str = None,
-    user_message: str = None
+    user_message: str = None,
+    user_id: str = None
 ):
     """
     Generate AI response + TTS audio and send to Vonage WebSocket.
     
     Args:
         ws: WebSocket connection
-        text: Direct text to speak (skips Claude if provided)
-        voice_id: ElevenLabs voice clone ID
+        text: Direct text to speak (skips AI if provided)
+        voice_id: Voice ID (ElevenLabs cloned or Google system voice)
         engine: ConversationEngine instance
         conversation_history: Running conversation
         call_uuid: Call UUID for session tracking
-        user_message: What the manager said (triggers Claude response)
+        user_message: What the manager said (triggers Gemini response)
+        user_id: Username for MongoDB MCP queries
     """
+    total_bytes_sent = 0
     try:
         # Get response text
         if text:
             response_text = text
         elif user_message and engine:
             conversation_history.append({"role": "user", "content": user_message})
-            response_text = engine.generate_response(user_message, conversation_history)
+            response_text = engine.generate_response(user_message, conversation_history, user_id=user_id)
             conversation_history.append({"role": "assistant", "content": response_text})
             
             # Save to session
@@ -349,11 +446,11 @@ def _send_tts_response(
                 session_manager.add_turn(call_uuid, "user", user_message)
                 session_manager.add_turn(call_uuid, "assistant", response_text)
         else:
-            return
+            return 0
         
         logger.info(f"AI: \"{response_text}\"")
         
-        # Synthesize via ElevenLabs TTS
+        # Synthesize TTS audio
         loop = asyncio.new_event_loop()
         try:
             audio_bytes = loop.run_until_complete(
@@ -361,65 +458,87 @@ def _send_tts_response(
             )
             
             if audio_bytes:
+                total_bytes_sent = len(audio_bytes)
                 # Send audio in chunks (Vonage expects PCM 16kHz 16-bit LE)
                 chunk_size = 640  # 20ms at 16kHz 16-bit
                 for i in range(0, len(audio_bytes), chunk_size):
                     chunk = audio_bytes[i:i + chunk_size]
                     ws.send(chunk)
                 
-                logger.info(f"Sent {len(audio_bytes)} bytes of TTS audio")
+                logger.info(f"Sent {total_bytes_sent} bytes of TTS audio")
         finally:
             loop.close()
             
     except Exception as e:
         logger.error(f"TTS response error: {e}", exc_info=True)
+    
+    return total_bytes_sent
 
 
 async def _synthesize_and_convert(text: str, voice_id: str = None) -> bytes:
     """
-    Synthesize text to PCM 16kHz 16-bit audio via ElevenLabs.
+    Synthesize text to PCM 16kHz 16-bit audio.
     
-    Uses the ElevenLabs REST API with output_format=pcm_16000 to get
-    raw PCM audio directly compatible with Vonage WebSocket.
+    Routes to the appropriate TTS engine:
+    - Google system voices (en-US-*): Google Cloud TTS
+    - ElevenLabs cloned voices: ElevenLabs TTS API
+    - Fallback: Google Cloud TTS Studio voice
     """
-    from app.config import ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID
-    import requests as req
-    
-    vid = voice_id or ELEVENLABS_VOICE_ID
-    
     try:
-        # Use REST API for simplicity and direct PCM output
-        response = req.post(
-            f"https://api.elevenlabs.io/v1/text-to-speech/{vid}",
-            headers={
-                "xi-api-key": ELEVENLABS_API_KEY,
-                "Content-Type": "application/json",
-                "Accept": "audio/pcm",
-            },
-            params={
-                "output_format": "pcm_16000",  # PCM 16kHz 16-bit signed LE
-            },
-            json={
-                "text": text,
-                "model_id": ELEVENLABS_MODEL_ID,
-                "voice_settings": {
-                    "stability": 0.5,
-                    "similarity_boost": 0.75,
-                    "style": 0.0,
-                    "use_speaker_boost": True,
-                },
-            },
-            timeout=15,
-        )
+        # Route 1: Google system voice (starts with "en-")
+        if voice_id and voice_id.startswith("en-"):
+            from app.services.google_ai_service import synthesize_speech
+            audio_data = synthesize_speech(text, voice_name=voice_id)
+            if audio_data:
+                return audio_data
         
-        if response.status_code != 200:
-            logger.error(f"ElevenLabs TTS error: {response.status_code} {response.text[:200]}")
-            return None
+        # Route 2: ElevenLabs cloned voice (any non-system voice ID from ElevenLabs)
+        elif voice_id and not voice_id.startswith("en-"):
+            logger.info(f"🎤 Using ElevenLabs TTS for cloned voice: {voice_id}")
+            try:
+                import httpx
+                from app.config import ELEVENLABS_API_KEY
+                
+                # ElevenLabs REST API for TTS — returns raw audio
+                url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+                headers = {
+                    "xi-api-key": ELEVENLABS_API_KEY,
+                    "Content-Type": "application/json",
+                    "Accept": "audio/wav"
+                }
+                payload = {
+                    "text": text,
+                    "model_id": "eleven_multilingual_v2",
+                    "voice_settings": {
+                        "stability": 0.5,
+                        "similarity_boost": 0.75,
+                        "style": 0.0,
+                        "use_speaker_boost": True
+                    },
+                    "output_format": "pcm_16000"
+                }
+                
+                resp = httpx.post(url, headers={**headers, "Accept": "audio/mpeg"}, json={**payload, "output_format": "pcm_16000"}, timeout=15.0)
+                
+                if resp.status_code == 200:
+                    audio_data = resp.content
+                    logger.info(f"🎤 ElevenLabs TTS: synthesized {len(audio_data)} bytes of PCM audio")
+                    return audio_data
+                else:
+                    logger.warning(f"ElevenLabs TTS failed ({resp.status_code}): {resp.text[:200]}")
+                    # Fall through to Google TTS fallback
+            except Exception as el_err:
+                logger.warning(f"ElevenLabs TTS error, falling back to Google: {el_err}")
+                # Fall through to Google TTS fallback
         
-        audio_data = response.content
-        logger.info(f"ElevenLabs TTS: synthesized {len(audio_data)} bytes of PCM audio")
-        return audio_data
+        # Fallback: Google Cloud TTS with default Studio voice
+        from app.services.google_ai_service import synthesize_speech
+        audio_data = synthesize_speech(text, voice_name="en-US-Studio-O")
+        if audio_data:
+            return audio_data
         
+        logger.error("All TTS engines returned None")
+        return b""
     except Exception as e:
-        logger.error(f"ElevenLabs synthesis error: {e}")
-        return None
+        logger.error(f"TTS synthesis failed: {e}")
+        return b""

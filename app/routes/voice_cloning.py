@@ -1,84 +1,56 @@
 from flask import Blueprint, request, jsonify
 import logging
 import os
-from app.services.elevenlabs_service.voice_cloning import VoiceCloningService
+import json
+import httpx
 from app.utils.audio_utils import AudioValidator
 from app.models.voice_profile import VoiceProfile
+from app.config import ELEVENLABS_API_KEY
 
 logger = logging.getLogger(__name__)
 cloning_bp = Blueprint('cloning', __name__)
-cloning_service = VoiceCloningService()
 voice_profile_model = VoiceProfile()
 
 
 @cloning_bp.route('/', methods=['GET'])
 def list_voices():
-    """List all available voices (API + Local Profiles)."""
-    import asyncio
-    merged_voices = []
-    seen_ids = set()
+    """List available voices for selection."""
+    voices = [
+        {"voice_id": "en-US-Studio-O", "name": "Google Studio (Female - Conversational)", "source": "system", "status": "active"},
+        {"voice_id": "en-US-Studio-Q", "name": "Google Studio (Male - Conversational)", "source": "system", "status": "active"},
+        {"voice_id": "en-US-Journey-F", "name": "Google Journey (Female - Expressive)", "source": "system", "status": "active"},
+        {"voice_id": "en-US-Journey-O", "name": "Google Journey (Male - Expressive)", "source": "system", "status": "active"},
+        {"voice_id": "en-US-Casual-K", "name": "Google Casual (Male - Casual)", "source": "system", "status": "active"},
+    ]
     
-    # 1. Fetch from Local MongoDB Profiles (High priority)
+    # Also fetch user's custom voices from MongoDB
     try:
-        local_profiles = voice_profile_model.list_user_voices()
-        logger.info(f"Retrieved {len(local_profiles)} local voice profiles.")
-        for p in local_profiles:
-            voice_id = p.get('voice_id')
-            if voice_id and voice_id not in seen_ids:
-                merged_voices.append({
-                    "voice_id": voice_id,
-                    "name": p.get('name', 'Cloned Voice'),
-                    "source": "local",
-                    "status": p.get('status', 'active')
-                })
-                seen_ids.add(voice_id)
+        profiles = voice_profile_model.collection.find()
+        for p in profiles:
+            voices.append({
+                "voice_id": p.get("voice_id"),
+                "name": p.get("name"),
+                "source": "local",
+                "status": "active"
+            })
     except Exception as e:
-        logger.error(f"Error fetching local profiles: {e}")
-
-    # 2. Fetch from ElevenLabs API (Fallback)
-    try:
-        api_voices = asyncio.run(cloning_service.list_voices())
-        logger.info(f"Retrieved {len(api_voices)} voices from ElevenLabs API.")
-        for v in api_voices:
-            voice_id = v.get('voice_id')
-            category = v.get('category')
-            
-            # Filter out preloaded/premade voices
-            if category == 'premade':
-                continue
-                
-            if voice_id not in seen_ids:
-                merged_voices.append({
-                    "voice_id": voice_id,
-                    "name": v.get('name'),
-                    "source": "elevenlabs",
-                    "status": "active",
-                    "category": category
-                })
-                seen_ids.add(voice_id)
-    except Exception as e:
-        logger.error(f"Error fetching ElevenLabs voices: {e}")
-        # We don't fail the whole request if local voices were found
-
-    return jsonify(merged_voices)
-
-
+        logger.warning(f"Could not load custom profiles from DB: {e}")
+        
+    return jsonify(voices)
 
 
 @cloning_bp.route('/clone', methods=['POST'])
 def clone_voice():
     """
-    Handle voice sample uploads and initiate cloning.
+    ElevenLabs Instant Voice Clone.
     Expects multi-part form data with 'name' and 'files'.
     """
-    import asyncio
     if 'files' not in request.files:
         return jsonify({"error": "No audio files provided"}), 400
         
     name = request.form.get('name', 'Custom Voice')
     uploaded_files = request.files.getlist('files')
     
-    # Temporary save for processing (as required by current ElevenLabs PVC flow)
     temp_paths = []
     os.makedirs('temp_uploads', exist_ok=True)
     
@@ -87,7 +59,7 @@ def clone_voice():
             path = os.path.join('temp_uploads', f.filename)
             f.save(path)
             
-            # AUDIO VALIDATION (New in v2.0)
+            # AUDIO VALIDATION (Required for Custom Voice)
             if f.filename.lower().endswith('.wav'):
                 is_valid, error = AudioValidator.validate_wav(path)
                 if not is_valid:
@@ -96,54 +68,97 @@ def clone_voice():
             
             temp_paths.append(path)
             
-        # Initiate cloning with ElevenLabs
-        voice_id = asyncio.run(cloning_service.clone_voice(name, temp_paths))
+        # Call ElevenLabs Instant Voice Cloning API
+        logger.info(f"Submitting {len(temp_paths)} audio samples to ElevenLabs for voice cloning...")
         
-        # PERSISTENCE (New in v2.0)
+        files_payload = [("files", (os.path.basename(p), open(p, "rb"))) for p in temp_paths]
+        data_payload = {
+            "name": name,
+            "labels": json.dumps({"category": "cloned", "app": "raincheck"}),
+        }
+        
+        response = httpx.post(
+            "https://api.elevenlabs.io/v1/voices/add",
+            headers={"xi-api-key": ELEVENLABS_API_KEY},
+            data=data_payload,
+            files=files_payload,
+            timeout=60.0,
+        )
+        response.raise_for_status()
+        
+        voice_id = response.json()["voice_id"]
+        
+        # PERSISTENCE
         profile_id = voice_profile_model.create_profile(voice_id, name)
+        logger.info(f"ElevenLabs voice cloned: {voice_id} ({name})")
         
         return jsonify({
             "status": "success",
             "voice_id": voice_id,
             "profile_id": profile_id,
-            "message": "Cloning process initiated and profile created."
+            "message": "Voice cloning complete and profile created."
         })
 
+    except httpx.HTTPStatusError as e:
+        logger.error(f"ElevenLabs API error: {e.response.status_code} - {e.response.text}")
+        return jsonify({"error": f"ElevenLabs API error: {e.response.text}"}), 502
+
     except Exception as e:
-        logger.error(f"Cloning error: {e}")
+        logger.error(f"Voice cloning error: {e}")
         return jsonify({"error": str(e)}), 500
 
     finally:
-        # Cleanup temp files after handoff to ElevenLabs
+        # Cleanup temp files
         for p in temp_paths:
             if os.path.exists(p): os.remove(p)
 
-@cloning_bp.route('/link', methods=['POST'])
-def link_voice():
-    """Manually link an existing ElevenLabs voice ID."""
-    data = request.get_json()
+
+@cloning_bp.route('/<voice_id>', methods=['PUT'])
+def update_voice(voice_id: str):
+    """Update a custom voice profile's name."""
+    data = request.get_json(silent=True) or {}
     name = data.get('name')
-    voice_id = data.get('voice_id')
-    
-    if not name or not voice_id:
-        return jsonify({"error": "Missing name or voice_id"}), 400
-        
+    characteristics = data.get('characteristics')
+
+    updates = {}
+    if name:
+        updates['name'] = name
+    if characteristics:
+        updates['characteristics'] = characteristics
+
+    if not updates:
+        return jsonify({"error": "No fields to update"}), 400
+
     try:
-        profile_id = voice_profile_model.create_profile(voice_id, name)
-        return jsonify({
-            "status": "success",
-            "voice_id": voice_id,
-            "profile_id": profile_id,
-            "message": "Existing voice linked successfully."
-        })
+        success = voice_profile_model.update_profile(voice_id, updates)
+        if success:
+            return jsonify({"status": "success", "message": "Voice profile updated."})
+        else:
+            return jsonify({"error": "Voice profile not found or unchanged"}), 404
     except Exception as e:
-        logger.error(f"Linking error: {e}")
+        logger.error(f"Update voice error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
 @cloning_bp.route('/<voice_id>', methods=['DELETE'])
-
-async def delete_voice(voice_id: str):
-    """Delete a custom voice."""
-    success = await cloning_service.delete_voice(voice_id)
-    return jsonify({"success": success})
+def delete_voice(voice_id: str):
+    """Delete a custom voice profile from MongoDB and ElevenLabs."""
+    try:
+        success = voice_profile_model.delete_profile(voice_id)
+        
+        # Also delete from ElevenLabs (best-effort)
+        try:
+            resp = httpx.delete(
+                f"https://api.elevenlabs.io/v1/voices/{voice_id}",
+                headers={"xi-api-key": ELEVENLABS_API_KEY},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            logger.info(f"Deleted voice {voice_id} from ElevenLabs")
+        except Exception as el_err:
+            logger.warning(f"Failed to delete voice {voice_id} from ElevenLabs: {el_err}")
+        
+        return jsonify({"success": success})
+    except Exception as e:
+        logger.error(f"Delete voice error: {e}")
+        return jsonify({"error": str(e)}), 500

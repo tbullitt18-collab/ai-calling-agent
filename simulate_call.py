@@ -1,7 +1,7 @@
 """
 Rain Check Call Simulation Script
 Tests the full conversation + TTS pipeline locally without making real calls.
-Mocks Vonage to verify: Claude conversation → ElevenLabs TTS → audio output.
+Mocks Vonage to verify: Gemini conversation → Google Cloud TTS → audio output.
 """
 
 import os
@@ -15,9 +15,9 @@ load_dotenv()
 
 
 def run_simulation():
-    print("🌧️  RAIN CHECK — CALL FLOW SIMULATION")
-    print("=" * 50)
-    print("Testing: Vonage NCCO → Claude Conversation → ElevenLabs TTS")
+    print("🌧️  RAIN CHECK — CALL FLOW SIMULATION (GOOGLE CLOUD NATIVE)")
+    print("=" * 60)
+    print("Testing: Vonage NCCO ➔ Vertex AI Gemini ➔ Google Cloud TTS (Studio Voice)")
     print()
     
     # ── Step 1: Test NCCO Generation ─────────────────────────────────
@@ -28,7 +28,7 @@ def run_simulation():
         ncco = generate_answer_ncco(
             call_uuid="sim-call-001",
             reason="sick_day",
-            voice_id="EkR0b2fNU4kBZ6syl9Vn"
+            voice_id="en-US-Studio-O"
         )
         print(f"  ✅ NCCO generated: {len(ncco)} actions")
         for i, action in enumerate(ncco):
@@ -56,7 +56,7 @@ def run_simulation():
         session = sm.create_session("sim-call-001", "+15550001234")
         print(f"  ✅ Session created: {session.call_uuid}")
         
-        context = {"reason": "sick_day", "notes": "Fever since last night", "voice_id": "EkR0b2fNU4kBZ6syl9Vn"}
+        context = {"reason": "sick_day", "notes": "Fever since last night", "voice_id": "en-US-Studio-O"}
         sm.set_context("sim-call-001", context)
         retrieved = sm.get_context("sim-call-001")
         print(f"  ✅ Context stored and retrieved: {retrieved.get('reason')}")
@@ -68,8 +68,8 @@ def run_simulation():
     except Exception as e:
         print(f"  ❌ Session management failed: {e}")
     
-    # ── Step 3: Test Conversation Engine (Claude) ────────────────────
-    print(f"\n[Step 3] Testing Conversation Engine (Claude)...")
+    # ── Step 3: Test Conversation Engine (Gemini) ────────────────────
+    print(f"\n[Step 3] Testing Conversation Engine (Gemini)...")
     try:
         from app.services.conversation_service import ConversationEngine, AgentPersona
         
@@ -110,56 +110,40 @@ def run_simulation():
         
     except Exception as e:
         print(f"  ❌ Conversation engine failed: {e}")
-        print(f"     (Make sure CLAUDE_API_KEY is set in .env)")
     
-    # ── Step 4: Test ElevenLabs TTS ──────────────────────────────────
-    print(f"\n[Step 4] Testing ElevenLabs TTS...")
+    # ── Step 4: Test Google Cloud TTS ────────────────────────────────
+    print(f"\n[Step 4] Testing Google Cloud TTS...")
     try:
-        import asyncio
-        from app.services.elevenlabs_service.voice_synthesis import ElevenLabsRealtimeClient
+        from app.services.google_ai_service import synthesize_speech
         
-        client = ElevenLabsRealtimeClient()
-        print(f"  ✅ ElevenLabs client initialized (Voice: {client.voice_id})")
+        test_text = "Hi, I won't be able to make it in today."
+        print(f"  Synthesizing text: \"{test_text}\" using voice en-US-Studio-O")
         
-        async def test_tts():
-            try:
-                await client.connect_tts()
-                print("  ✅ WebSocket connected to ElevenLabs TTS")
-                
-                audio = await client.synthesize_text("Hi, I won't be able to make it in today.")
-                print(f"  ✅ Synthesized {len(audio)} bytes of audio")
-                
-                # Save test audio
-                with open("test_output.mp3", "wb") as f:
-                    f.write(audio)
-                print(f"  ✅ Audio saved to test_output.mp3")
-                
-                return audio
-            except Exception as e:
-                print(f"  ❌ TTS error: {e}")
-                return None
-            finally:
-                await client.close()
-        
-        audio = asyncio.run(test_tts())
-        
+        audio = synthesize_speech(test_text, voice_name="en-US-Studio-O")
+        if audio:
+            print(f"  ✅ Synthesized {len(audio)} bytes of audio (raw PCM)")
+            
+            # Save test audio as raw PCM
+            with open("test_output.pcm", "wb") as f:
+                f.write(audio)
+            print(f"  ✅ Audio saved to test_output.pcm")
+        else:
+            print("  ❌ TTS returned empty/None audio content.")
+            
     except Exception as e:
-        print(f"  ❌ ElevenLabs TTS failed: {e}")
-        print(f"     (Make sure ELEVENLABS_API_KEY is set in .env)")
+        print(f"  ❌ Google Cloud TTS failed: {e}")
     
     # ── Summary ──────────────────────────────────────────────────────
     print()
-    print("=" * 50)
-    print("🌧️  SIMULATION COMPLETE")
+    print("=" * 60)
+    print("🌧_ SIMULATION COMPLETE")
     print()
-    print("Pipeline: Phone ↔ Vonage (NCCO) ↔ Flask ↔ Claude ↔ ElevenLabs TTS")
+    print("Pipeline: Phone ↔ Vonage (NCCO) ↔ Flask ↔ Vertex AI Gemini ↔ Google Cloud TTS")
     print()
     print("Next steps:")
-    print("  1. Set VONAGE_APPLICATION_ID and private key in .env")
-    print("  2. Start ngrok: ngrok http 5000")
-    print("  3. Update BASE_URL in .env with ngrok URL")
-    print("  4. Run Flask: python -m flask run")
-    print("  5. Make a test call from the dashboard!")
+    print("  1. Authenticate local gcloud: gcloud auth application-default login")
+    print("  2. Start local server: python start.py")
+    print("  3. Initiate a live test call: python test_live_call.py")
 
 
 if __name__ == "__main__":

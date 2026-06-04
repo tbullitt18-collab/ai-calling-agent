@@ -32,8 +32,8 @@ ELEVENLABS_API_KEY = _require_env("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = _require_env("ELEVENLABS_VOICE_ID")
 ELEVENLABS_MODEL_ID = _get_env("ELEVENLABS_MODEL_ID", "eleven_turbo_v2_5")
 
-# Claude (Anthropic) Configuration
-CLAUDE_API_KEY = _require_env("CLAUDE_API_KEY")
+# Gemini Configuration
+GEMINI_API_KEY = _require_env("GEMINI_API_KEY")
 
 # Database Configuration
 MONGODB_URI = _require_env("MONGODB_URI")

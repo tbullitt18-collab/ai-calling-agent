@@ -1,0 +1,6 @@
+﻿Calling 15025958197 from 12674281836
+Answer URL: https://raincheck-api-562927333515.us-central1.run.app/webhook/answer?reason=Sick+Day
+Event URL:  https://raincheck-api-562927333515.us-central1.run.app/webhook/events
+
+Status: 201
+Response: {"uuid":"3957f60c-6d07-4ab0-9c5c-d544fe697e20","status":"started","direction":"outbound","conversation_uuid":"CON-17ba9807-75c8-45d5-9e4b-f17e77c8eda7"}

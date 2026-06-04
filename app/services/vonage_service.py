@@ -197,8 +197,9 @@ def initiate_outbound_call(
             logger.info(f"Vonage call initiated: {call_uuid}")
             return {"uuid": call_uuid}
         else:
-            logger.error(f"Vonage call error: {resp.status_code} {resp.text}")
-            raise Exception(f"Vonage API error: {resp.status_code}")
+            error_detail = resp.text[:500]
+            logger.error(f"Vonage call error: {resp.status_code} {error_detail}")
+            raise Exception(f"Vonage API error ({resp.status_code}): {error_detail}")
             
     except Exception as e:
         logger.error(f"Vonage call error: {e}")
