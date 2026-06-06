@@ -70,7 +70,6 @@ for name, code in [
     ("flask", "import flask"),
     ("flask_cors", "import flask_cors"),
     ("flask_sock", "import flask_sock"),
-    ("openai", "import openai"),
     ("vonage", "import vonage"),
     ("pymongo", "import pymongo"),
     ("redis_pkg", "import redis"),
