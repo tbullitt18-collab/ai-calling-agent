@@ -1,45 +1,36 @@
-# Rain Check - AI Voice Application
+# Rain Check - Your Grounded AI Voice Twin
 
-> **Multimodal AI voice application that simulates natural, two-way phone conversations between humans and a lifelike AI voice.**
+> **An AI voice application that simulates natural, two-way phone conversations, deeply integrated with your personal knowledge base via MongoDB and powered by Google Gemini.**
 
-Rain Check is a production-ready voice automation platform that makes AI sound human. It answers calls automatically, listens, understands context, and responds in real-time with sub-second latency.
+**Rain Check** is a production-ready voice automation platform built for the **Google Cloud Rapid Agent Hackathon 2026 (MongoDB Track)**. It answers calls automatically, listens, understands context, and responds in real-time. What sets Rain Check apart is its use of the **MongoDB Model Context Protocol (MCP)**—it doesn't just sound like you, it *knows* what you know.
 
-## Features
+During a call, the Gemini-powered agent dynamically queries your MongoDB Atlas database to answer scheduling questions, retrieve FAQs, and pull up contact context, completely eliminating hallucinations.
 
-- **Natural Conversations** - AI voice that feels confident, warm, and emotionally intelligent
-- **Real-Time Latency** - <1 second end-to-end response time
-- **Context Memory** - Maintains conversation context throughout the call
-- **Intent Detection** - Automatically detects caller intent and asks clarifying follow-ups
-- **Voice Cloning** - Use ElevenLabs to create custom voice personas
-- **Call Analytics** - Full transcript logging with AI-generated summaries
-- **Webhook API** - Easy integration with Vonage Voice API
+## 🚀 Features
 
-## Architecture
+- **Gemini Intelligence** - Powered by Google's state-of-the-art **Gemini 1.5 Flash** for blazing fast, highly contextual reasoning.
+- **MongoDB MCP Integration** - Real-time context grounding using a MongoDB Model Context Protocol server. The AI queries your live schedule and FAQs during the call.
+- **Voice Cloning** - Users can clone their own voice using ElevenLabs for a truly personalized AI Twin.
+- **Natural Conversations** - Sub-second latency, detecting caller intent and asking clarifying follow-ups.
+- **Call Analytics** - Full transcripts and AI-generated summaries saved securely in MongoDB.
+- **Google Cloud Native** - Containerized and deployed on Google Cloud Run for infinite scalability.
 
-```
-┌─────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│   Caller    │───▶│   Twilio Voice   │───▶│    Flask Backend    │
-│  (Phone)    │◀───│  Voice Webhooks  │◀───│   /webhook/answer   │
-└─────────────┘    └──────────────────┘    │   /webhook/event    │
-                                           └──────────┬──────────┘
-                         ┌────────────────────────────┼────────────────────────────┐
-                         ▼                            ▼                            ▼
-                ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
-                │   ElevenLabs    │         │     Claude      │         │    Redis        │
-                │  Real-Time TTS  │         │   AI Intelligence  │         │  Session Store  │
-                └─────────────────┘         └─────────────────┘         └─────────────────┘
-```
+## 🏗️ Architecture & Technology Stack
 
-## Quick Start
+- **Core AI / LLM:** Google Cloud Vertex AI (Gemini 1.5 Flash)
+- **Knowledge Base:** MongoDB Atlas & MongoDB MCP
+- **Telephony:** Vonage Voice API
+- **Voice Generation / TTS:** ElevenLabs API
+- **Hosting:** Google Cloud Run (Containerized Flask App)
+
+## 🏁 Quick Start (Local Development)
 
 ### Prerequisites
-
 - Python 3.11+
-- Twilio account with Voice capabilities
+- Google Cloud Project with Vertex AI enabled
+- Vonage Voice API credentials
 - ElevenLabs API key
-- Claude (Anthropic) API key
-- Redis (for session management)
-- MongoDB (for call logging)
+- MongoDB Atlas cluster
 
 ### Installation
 
@@ -49,11 +40,10 @@ Rain Check is a production-ready voice automation platform that makes AI sound h
    cd ai-calling-agent
    ```
 
-2. **Create virtual environment:**
+2. **Create a virtual environment:**
    ```bash
    python -m venv venv
-   venv\Scripts\activate  # Windows
-   # source venv/bin/activate  # Linux/Mac
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies:**
@@ -61,171 +51,69 @@ Rain Check is a production-ready voice automation platform that makes AI sound h
    pip install -r requirements.txt
    ```
 
-4. **Configure environment:**
-   ```bash
-   copy .env.example .env
-   # Edit .env with your API keys
+4. **Configure your environment:**
+   Create a `.env` file in the root directory and populate it with your credentials:
+   ```env
+   # Google Cloud
+   GOOGLE_CLOUD_PROJECT=your-project-id
+   GOOGLE_CLOUD_LOCATION=us-central1
+
+   # Vonage Voice API
+   VONAGE_APPLICATION_ID=your-app-id
+   VONAGE_API_KEY=your-api-key
+   VONAGE_API_SECRET=your-api-secret
+   VONAGE_PRIVATE_KEY_PATH=./private.key
+   VONAGE_NUMBER=your-vonage-number
+
+   # Database (MongoDB MCP)
+   MONGODB_URI=mongodb+srv://...
+
+   # ElevenLabs
+   ELEVENLABS_API_KEY=your-elevenlabs-key
+   ELEVENLABS_VOICE_ID=your-voice-id
+   ELEVENLABS_MODEL_ID=eleven_multilingual_v2
+
+   # Server Config
+   FLASK_SECRET_KEY=your-secret
+   BASE_URL=https://your-ngrok-or-cloudrun-url
    ```
 
 5. **Run the application:**
    ```bash
-   python app.py
+   python start.py
    ```
 
-### Twilio Deployment Setup
+## ☁️ Google Cloud Run Deployment
 
-1. **Start Ngrok** (to expose your local server):
+Rain Check is designed to be easily deployed on Google Cloud Run.
+
+1. **Build and submit the Docker image:**
    ```bash
-   ngrok http 5000
+   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/raincheck-api
    ```
-2. Copy the **Forwarding URL** (e.g., `https://1234.ngrok-free.app`).
-3. Go to **Twilio Console** > **Phone Numbers** > **Manage** > **Active Numbers**.
-4. Click your phone number.
-5. Under **Voice & Fax** > **A Call Comes In**:
-   - Select **Webhook**
-   - URL: `YOUR_NGROK_URL/webhook/answer` (e.g., `https://1234.ngrok-free.app/webhook/answer`)
-   - HTTP Method: `POST`
-6. Save configuration.
 
-### Docker Deployment
+2. **Deploy to Cloud Run:**
+   ```bash
+   gcloud run deploy raincheck-api \
+     --image gcr.io/YOUR_PROJECT_ID/raincheck-api \
+     --platform managed \
+     --region us-central1 \
+     --allow-unauthenticated
+   ```
 
-```bash
-# Start all services
-docker-compose up -d
+3. **Set Environment Variables:**
+   Ensure you pass all required environment variables via the Cloud Run console or CLI.
 
-# View logs
-docker-compose logs -f raincheck
+## 🤝 The Hackathon Implementation
 
-# Stop services
-docker-compose down
-```
+For the **Google Cloud Rapid Agent Hackathon**, we specifically built:
+1. **Google AI Integration**: Replaced legacy LLM architectures with `google-genai`, utilizing Gemini 1.5 Flash's massive context window and speed for real-time voice synthesis.
+2. **MongoDB MCP Track**: Implemented a dynamic MongoDB MCP service that exposes database functions (`search_calendar`, `query_faq`, `lookup_contact`) directly to the Gemini model via Function Calling.
 
-## Configuration
+## 📜 License
 
-Create a `.env` file with the following variables:
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-```env
-# Twilio Voice API
-TWILIO_ACCOUNT_SID=your_account_sid
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=your_twilio_number
+## 👤 Author
 
-# Claude (Anthropic)
-CLAUDE_API_KEY=your_claude_key
-
-# ElevenLabs Real-Time API
-ELEVENLABS_API_KEY=your_api_key
-ELEVENLABS_VOICE_ID=your_voice_id
-ELEVENLABS_MODEL_ID=eleven_turbo_v2_5
-
-# Database
-MONGODB_URI=mongodb://localhost:27017/raincheck
-REDIS_URL=redis://localhost:6379
-
-# Server
-FLASK_ENV=development
-BASE_URL=https://your-domain.ngrok.io
-```
-
-## API Endpoints
-
-### Webhooks (Twilio)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/webhook/answer` | POST | Handles incoming call (returns TwiML) |
-| `/webhook/outbound-twiml` | POST | Handles outbound call connection |
-
-### REST API
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Health check |
-| `/api/call/initiate` | POST | Start outbound call |
-| `/api/call/<uuid>` | GET | Get call details |
-| `/api/calls/recent` | GET | List recent calls |
-| `/api/analytics` | GET | Get call analytics |
-
-### WebSocket
-
-| Endpoint | Description |
-|----------|-------------|
-| `/ws/audio/<call_sid>` | Real-time audio streaming (Media Stream) |
-
-## Project Structure
-
-```
-/ai-calling-agent
-├── app.py                 # Main Flask application
-├── config.py              # Configuration loader
-├── requirements.txt       # Python dependencies
-├── Dockerfile            # Container build
-├── docker-compose.yml    # Service orchestration
-├── /modules
-│   ├── twilio_api.py          # Twilio TwiML & Call handling
-│   ├── elevenlabs_realtime.py # ElevenLabs WebSocket client
-│   ├── session_manager.py     # Redis session handling
-│   ├── conversation_engine.py # Claude-based AI response
-│   ├── intent_detector.py     # Claude-based intent logic
-│   └── call_logger.py         # MongoDB logging
-└── /tests
-    ├── test_webhooks.py       # Endpoint tests
-    ├── test_modules.py        # Unit tests
-```
-
-## Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=modules --cov-report=html
-
-# Run specific test file
-pytest tests/test_webhooks.py -v
-```
-
-## Customizing the AI Persona
-
-Edit the `AgentPersona` configuration in your code:
-
-```python
-from modules.conversation_engine import ConversationEngine, AgentPersona
-
-persona = AgentPersona(
-    name="Your Agent Name",
-    warmth=0.8,       # 0-1: How warm/caring
-    confidence=0.7,   # 0-1: How assertive
-    empathy=0.9,      # 0-1: How understanding
-    tone="friendly",  # professional, friendly, casual, formal
-    custom_instructions="Additional behavior rules..."
-)
-
-engine = ConversationEngine(persona=persona)
-```
-
-## Performance Tuning
-
-### Latency Targets
-
-| Component | Target | Actual |
-|-----------|--------|--------|
-| Twilio → Flask | <50ms | - |
-| STT Processing | <200ms | - |
-| Claude Response | <400ms | - |
-| TTS Generation | <250ms | - |
-
-### Optimization Tips
-
-1. **Use ElevenLabs Turbo** - `eleven_turbo_v2_5` for lowest latency
-2. **Stream responses** - Don't buffer full audio
-3. **Regional deployment** - Deploy close to Twilio edge
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Author
-
-Built with ❤️ by Rain Check Team
+Built with ❤️ by Todd Brown (Rain Check)
