@@ -298,7 +298,21 @@ def media_stream(ws, call_uuid: str):
     TAIL_SILENCE_MS = 450      # ms of silence at tail to end utterance
     
     logger.info(f"Call context — Reason: {reason}, Voice: {voice_id}")
-    
+
+    # ── ConvAI Mode: ElevenLabs Conversational AI ─────────────────────
+    # Activated when ELEVENLABS_AGENT_ID is configured
+    try:
+        from app.config import ELEVENLABS_AGENT_ID, ELEVENLABS_API_KEY
+        use_convai = bool(ELEVENLABS_AGENT_ID)
+    except Exception:
+        use_convai = False
+
+    if use_convai:
+        logger.info("🎙️  ElevenLabs ConvAI mode ACTIVE")
+        _run_convai_bridge(ws, call_uuid, context, represented_user, reason, notes, call_user_id)
+        return
+
+    # ── Legacy Pipeline (Gemini STT → LLM → TTS) ─────────────────────
     try:
         import queue
         outbound_queue = queue.Queue()
@@ -466,6 +480,86 @@ def media_stream(ws, call_uuid: str):
         logger.error(f"WebSocket error: {e}", exc_info=True)
     finally:
         logger.info(f"WebSocket closed: {call_uuid}")
+
+
+def _run_convai_bridge(ws, call_uuid, context, represented_user, reason, notes, user_id):
+    """
+    Run ElevenLabs ConvAI bridge for a Vonage call.
+    This replaces the legacy STT → LLM → TTS pipeline entirely.
+    
+    The bridge sends Vonage PCM audio directly to ElevenLabs ConvAI WebSocket,
+    which handles STT + LLM + TTS internally and streams audio back.
+    """
+    import queue as q_module
+    from app.config import ELEVENLABS_AGENT_ID, ELEVENLABS_API_KEY
+    from app.services.elevenlabs_convai_service import ElevenLabsConvAIBridge
+
+    outbound_queue = q_module.Queue()
+
+    # Build system prompt from call context
+    system_prompt = (
+        f"You are {represented_user}'s AI voice assistant answering their phone. "
+        f"Be natural, friendly, and brief. "
+    )
+    if reason and reason.lower() not in ('calling in', 'none', ''):
+        system_prompt += f"The caller is calling about: {reason}. "
+    if notes:
+        system_prompt += f"Important context: {notes}. "
+
+    caller_phone = context.get('from_number', '')
+
+    bridge = ElevenLabsConvAIBridge(
+        agent_id=ELEVENLABS_AGENT_ID,
+        api_key=ELEVENLABS_API_KEY,
+        outbound_queue=outbound_queue,
+        system_prompt_override=system_prompt,
+        caller_phone=caller_phone,
+        user_id=user_id,
+    )
+
+    bridge.start()
+    logger.info(f"ConvAI bridge started for call {call_uuid}")
+
+    try:
+        while True:
+            # Drain outbound queue first
+            while not outbound_queue.empty():
+                try:
+                    chunk = outbound_queue.get_nowait()
+                    ws.send(chunk)
+                except Exception as e:
+                    logger.error(f"Error sending ConvAI audio: {e}")
+                    raise
+
+            # Receive from Vonage
+            try:
+                message = ws.receive(timeout=0.05)
+            except Exception as e:
+                raise e
+
+            if message is None:
+                continue
+
+            if isinstance(message, bytes):
+                bridge.send_audio(message)
+
+            elif isinstance(message, str):
+                try:
+                    data = json.loads(message)
+                    event = data.get('event')
+                    if event == 'websocket:connected':
+                        logger.info(f"ConvAI call {call_uuid}: Vonage WS handshake complete")
+                    elif event == 'websocket:disconnected':
+                        logger.info(f"ConvAI call {call_uuid}: Vonage WS disconnected")
+                        break
+                except json.JSONDecodeError:
+                    pass
+
+    except Exception as e:
+        logger.error(f"ConvAI bridge error: {e}", exc_info=True)
+    finally:
+        bridge.stop()
+        logger.info(f"ConvAI bridge stopped for call {call_uuid}")
 
 
 def _transcribe_audio(audio_buffer: bytearray) -> str:

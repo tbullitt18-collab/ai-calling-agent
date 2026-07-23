@@ -68,10 +68,11 @@ VONAGE_APPLICATION_ID = _get_env("VONAGE_APPLICATION_ID", "bed9794a-0f5b-4e51-a3
 VONAGE_PRIVATE_KEY_PATH = _resolve_private_key()
 VONAGE_NUMBER = _require_env("VONAGE_NUMBER")
 
-# ElevenLabs Configuration (Voice Cloning & Synthesis)
+# ElevenLabs Configuration (Voice Cloning & Synthesis & ConvAI)
 ELEVENLABS_API_KEY = _get_env('ELEVENLABS_API_KEY')
 ELEVENLABS_VOICE_ID = _get_env('ELEVENLABS_VOICE_ID')
 ELEVENLABS_MODEL_ID = _get_env('ELEVENLABS_MODEL_ID', 'eleven_multilingual_v2')
+ELEVENLABS_AGENT_ID = _get_env('ELEVENLABS_AGENT_ID')  # ConvAI agent ID from ElevenLabs dashboard
 
 # Google Cloud / Vertex AI Configuration
 GOOGLE_CLOUD_PROJECT = _require_env("GOOGLE_CLOUD_PROJECT")
