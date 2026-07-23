@@ -17,7 +17,7 @@ def api_initiate_call():
     Initiate an outbound call via Vonage.
     Expects: {"to": "+1234567890", "reason": "...", "notes": "...", "voice_id": "..."}
     """
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     to_number = data.get('to')
     reason = data.get('reason')
     notes = data.get('notes')
@@ -72,9 +72,12 @@ def api_recent_calls():
         call_logger = get_call_logger()
         calls = call_logger.get_recent_calls(limit=limit)
         
-        # Convert ObjectIds for JSON serialization
+        # Convert ObjectIds and datetimes for JSON serialization
         for call in calls:
             call['_id'] = str(call['_id'])
+            for key, val in list(call.items()):
+                if hasattr(val, 'isoformat'):
+                    call[key] = val.isoformat()
         
         return jsonify({"calls": calls})
     except Exception as e:

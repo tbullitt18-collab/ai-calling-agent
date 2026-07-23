@@ -51,7 +51,7 @@ def login():
         session['authenticated'] = True
         session['username'] = username
         logger.info(f"Admin '{username}' logged in")
-        return jsonify({"status": "ok", "redirect": "/"})
+        return jsonify({"status": "ok", "redirect": "/dashboard"})
 
     # 2. Check MongoDB users
     try:
@@ -61,7 +61,7 @@ def login():
             session['authenticated'] = True
             session['username'] = username
             logger.info(f"User '{username}' logged in")
-            return jsonify({"status": "ok", "redirect": "/"})
+            return jsonify({"status": "ok", "redirect": "/dashboard"})
     except Exception as e:
         logger.error(f"MongoDB auth check failed: {e}")
 
@@ -106,11 +106,31 @@ def register():
         session['authenticated'] = True
         session['username'] = username
         logger.info(f"New user registered: '{username}'")
-        return jsonify({"status": "ok", "redirect": "/"})
+        return jsonify({"status": "ok", "redirect": "/dashboard"})
 
     except Exception as e:
         logger.error(f"Registration failed: {e}")
         return jsonify({"error": "Registration failed. Please try again."}), 500
+
+
+@auth_bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """Handle forgot password requests."""
+    data = request.get_json(silent=True) or {}
+    username = data.get('username', '').strip()
+
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+
+    # In a real app, we would:
+    # 1. Lookup user by username
+    # 2. Generate a secure reset token
+    # 3. Send email to the user's associated email address
+    
+    logger.info(f"Password reset requested for '{username}'")
+    
+    # Always return success to prevent username enumeration
+    return jsonify({"status": "ok", "message": "If an account exists, a reset link has been sent."})
 
 
 @auth_bp.route('/logout', methods=['POST'])

@@ -6,9 +6,15 @@ Replaces OpenAI, Deepgram, and ElevenLabs for non-cloned voice operations.
 
 import logging
 import json
+import os
 from typing import List, Dict, Optional, Any
 
 logger = logging.getLogger(__name__)
+
+# Configurable model with env var override — prevents outages from model deprecation
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# Fallback models to try if the primary returns 404 NOT_FOUND
+GEMINI_FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]
 
 # ── Lazy-initialized clients ────────────────────────────────────────
 _gemini_model = None
@@ -62,7 +68,7 @@ def gemini_chat(
     max_tokens: int = 200,
     temperature: float = 0.7,
     json_mode: bool = False,
-    model: str = "gemini-2.5-flash",
+    model: str = None,
     mcp_tools: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
@@ -159,11 +165,33 @@ def gemini_chat(
                 }
             ]}]
 
-        response = client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=gen_config,
-        )
+        # Use configured model, with automatic fallback on 404
+        effective_model = model or GEMINI_MODEL
+        models_to_try = [effective_model] + [m for m in GEMINI_FALLBACK_MODELS if m != effective_model]
+        
+        response = None
+        last_error = None
+        for try_model in models_to_try:
+            try:
+                response = client.models.generate_content(
+                    model=try_model,
+                    contents=contents,
+                    config=gen_config,
+                )
+                if try_model != effective_model:
+                    logger.warning(f"Primary model '{effective_model}' failed, succeeded with fallback '{try_model}'")
+                break  # Success
+            except Exception as model_err:
+                error_str = str(model_err)
+                if "404" in error_str or "NOT_FOUND" in error_str:
+                    logger.warning(f"Model '{try_model}' not found (404), trying next fallback...")
+                    last_error = model_err
+                    continue
+                else:
+                    raise  # Non-404 errors should propagate immediately
+        
+        if response is None:
+            raise last_error or RuntimeError(f"All Gemini models failed: {models_to_try}")
 
         # Check if the model called a function — execute real MongoDB MCP query
         if response.function_calls:
@@ -198,12 +226,15 @@ def gemini_chat(
             ))
             contents.append(types.Content(
                 role="user",
-                parts=[types.Part.from_function_response(name=fc.name, response={"result": tool_response})]
+                parts=[
+                    types.Part.from_function_response(name=fc.name, response={"result": tool_response}),
+                    types.Part.from_text(text="SYSTEM INSTRUCTION: Keep your response extremely brief, casual, and conversational. Do not list items or ramble, just give the direct answer as quickly as possible.")
+                ]
             ))
             
             # Generate the final response based on tool output
             final_response = client.models.generate_content(
-                model=model,
+                model=try_model,
                 contents=contents,
                 config=gen_config,
             )

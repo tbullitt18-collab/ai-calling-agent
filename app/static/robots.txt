@@ -1,0 +1,12 @@
+# Rain Check AI - robots.txt
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /session/
+Disallow: /voices/
+Disallow: /profile/
+Disallow: /webhook/
+
+# Sitemap location
+Sitemap: https://raincheck-api-562927333515.us-central1.run.app/sitemap.xml

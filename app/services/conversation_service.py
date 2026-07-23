@@ -72,20 +72,21 @@ TONE: {self.persona.tone}
             AI response text
         """
         try:
-            from app.services.google_ai_service import gemini_chat
+            from app.services.anthropic_service import claude_chat
 
             messages = [{"role": "system", "content": self.system_prompt}]
             
             if conversation_history:
-                messages.extend(conversation_history)
+                # Cap history to last 12 turns to prevent growing Gemini latency on long calls
+                messages.extend(conversation_history[-12:])
             
             # Pass user_id to MCP tools so MongoDB queries are scoped correctly
             mcp_config = [{"user_id": user_id}] if user_id else [{}]
             
-            return gemini_chat(
+            return claude_chat(
                 messages=messages,
                 max_tokens=200,
-                temperature=0.85,
+                temperature=0.75,
                 mcp_tools=mcp_config
             )
             

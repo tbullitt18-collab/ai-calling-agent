@@ -3,6 +3,12 @@ let activeVoiceId = null;
 let voicesCache = [];
 let userProfile = null;
 
+// XSS protection: escape HTML entities in user-supplied strings
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // ══════════════════════════════════════════
 // INITIALIZATION
 // ══════════════════════════════════════════
@@ -12,6 +18,7 @@ async function init() {
     await fetchVoices();
     await loadSetup();
     await fetchKnowledgeBase();
+    await fetchCallHistory();
 }
 
 // ══════════════════════════════════════════
@@ -412,19 +419,66 @@ function closeAllModals() {
     hidePrivacyModal();
 }
 
+let mediaRecorder;
+let audioChunks = [];
+let recordedBlob = null;
+let isRecording = false;
+
+async function toggleRecording() {
+    const btn = document.getElementById('recordBtn');
+    const status = document.getElementById('recordStatus');
+    
+    if (isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        btn.innerHTML = '🔴 Start Recording';
+        status.textContent = 'Recording stopped. Ready to clone!';
+    } else {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) audioChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = () => {
+                // ElevenLabs accepts webm/wav etc, MediaRecorder usually produces webm
+                recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                stream.getTracks().forEach(track => track.stop());
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            btn.innerHTML = '⏹ Stop Recording';
+            status.textContent = 'Recording... Read a few sentences naturally.';
+            recordedBlob = null;
+        } catch (err) {
+            console.error("Microphone access denied", err);
+            status.textContent = 'Error: Microphone access denied.';
+        }
+    }
+}
+
 async function startCloning() {
     const name = document.getElementById('voiceName').value;
     const files = document.getElementById('voiceFiles').files;
     const consent = document.getElementById('consentCheck').checked;
 
     if (!name) return alert("Please provide a name for your custom voice.");
-    if (!files.length) return alert("Please select high-quality audio samples (.wav).");
+    if (!recordedBlob && !files.length) return alert("Please record an audio sample first.");
     if (!consent) return alert("You must provide explicit consent for ElevenLabs to process your audio recordings.");
 
     const formData = new FormData();
     formData.append('name', name);
-    for (let i = 0; i < files.length; i++) {
-        formData.append('files', files[i]);
+    
+    if (recordedBlob) {
+        formData.append('files', recordedBlob, 'recording.webm');
+    } else {
+        for (let i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
     }
 
     alert("Voice cloning initiated via ElevenLabs. This usually takes just a few seconds.");
@@ -536,13 +590,17 @@ async function fetchKnowledgeBase() {
         // Fetch FAQs
         const faqResp = await fetch(`${API_BASE}/api/mcp/faqs`);
         if (faqResp.ok) {
-            const faqs = await faqResp.json();
+            const faqData = await faqResp.json();
+            const faqs = faqData.faqs || [];
             const faqList = document.getElementById('faqList');
             faqList.innerHTML = faqs.length ? '' : '<p style="color: var(--text-secondary); font-size: 0.8rem;">No FAQs yet.</p>';
             faqs.forEach(f => {
-                faqList.innerHTML += `<div style="background: rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem;">
-                    <strong style="display:block; font-size: 0.85rem; color: var(--accent-blue);">Q: ${f.question}</strong>
-                    <span style="font-size: 0.8rem;">A: ${f.answer}</span>
+                faqList.innerHTML += `<div style="background: rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <strong style="display:block; font-size: 0.85rem; color: var(--accent-blue);">Q: ${escapeHtml(f.question)}</strong>
+                        <span style="font-size: 0.8rem;">A: ${escapeHtml(f.answer)}</span>
+                    </div>
+                    <button class="btn btn-sm" style="background: transparent; border: none; padding: 0.2rem; cursor: pointer; font-size: 1rem;" onclick="deleteFaq('${f._id}')" title="Delete">🗑️</button>
                 </div>`;
             });
         }
@@ -550,13 +608,17 @@ async function fetchKnowledgeBase() {
         // Fetch Calendar
         const calResp = await fetch(`${API_BASE}/api/mcp/calendar`);
         if (calResp.ok) {
-            const events = await calResp.json();
+            const calData = await calResp.json();
+            const events = calData.events || [];
             const calList = document.getElementById('calendarList');
             calList.innerHTML = events.length ? '' : '<p style="color: var(--text-secondary); font-size: 0.8rem;">No events yet.</p>';
             events.forEach(e => {
-                calList.innerHTML += `<div style="background: rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem;">
-                    <strong style="display:block; font-size: 0.85rem; color: var(--accent-purple);">${e.title}</strong>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">${e.date}</span>
+                calList.innerHTML += `<div style="background: rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <strong style="display:block; font-size: 0.85rem; color: var(--accent-purple);">${escapeHtml(e.title)}</strong>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(e.date)}</span>
+                    </div>
+                    <button class="btn btn-sm" style="background: transparent; border: none; padding: 0.2rem; cursor: pointer; font-size: 1rem;" onclick="deleteCalendarEvent('${e._id}')" title="Delete">🗑️</button>
                 </div>`;
             });
         }
@@ -564,13 +626,17 @@ async function fetchKnowledgeBase() {
         // Fetch Contacts
         const conResp = await fetch(`${API_BASE}/api/mcp/contacts`);
         if (conResp.ok) {
-            const contacts = await conResp.json();
+            const conData = await conResp.json();
+            const contacts = conData.contacts || [];
             const conList = document.getElementById('contactList');
             conList.innerHTML = contacts.length ? '' : '<p style="color: var(--text-secondary); font-size: 0.8rem;">No contacts yet.</p>';
             contacts.forEach(c => {
-                conList.innerHTML += `<div style="background: rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem;">
-                    <strong style="display:block; font-size: 0.85rem; color: #3fb950;">${c.name}</strong>
-                    <span style="font-size: 0.8rem; color: var(--text-secondary);">${c.role}</span>
+                conList.innerHTML += `<div style="background: rgba(255,255,255,0.05); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <strong style="display:block; font-size: 0.85rem; color: #3fb950;">${escapeHtml(c.name)}</strong>
+                        <span style="font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(c.role)}</span>
+                    </div>
+                    <button class="btn btn-sm" style="background: transparent; border: none; padding: 0.2rem; cursor: pointer; font-size: 1rem;" onclick="deleteContact('${c._id}')" title="Delete">🗑️</button>
                 </div>`;
             });
         }
@@ -627,6 +693,30 @@ async function addContact() {
     } catch (e) { alert('Error adding contact'); }
 }
 
+async function deleteFaq(id) {
+    if (!confirm('Delete this FAQ?')) return;
+    try {
+        await fetch(`${API_BASE}/api/mcp/faqs/${id}`, { method: 'DELETE' });
+        fetchKnowledgeBase();
+    } catch (e) { alert('Error deleting FAQ'); }
+}
+
+async function deleteCalendarEvent(id) {
+    if (!confirm('Delete this calendar event?')) return;
+    try {
+        await fetch(`${API_BASE}/api/mcp/calendar/${id}`, { method: 'DELETE' });
+        fetchKnowledgeBase();
+    } catch (e) { alert('Error deleting calendar event'); }
+}
+
+async function deleteContact(id) {
+    if (!confirm('Delete this contact?')) return;
+    try {
+        await fetch(`${API_BASE}/api/mcp/contacts/${id}`, { method: 'DELETE' });
+        fetchKnowledgeBase();
+    } catch (e) { alert('Error deleting contact'); }
+}
+
 async function seedDemoData() {
     try {
         const btn = event.target;
@@ -648,4 +738,132 @@ async function seedDemoData() {
         event.target.disabled = false;
     }
 }
+
+async function clearKnowledgeBase() {
+    if (!confirm('Are you sure you want to delete all FAQs, Calendar events, and Contacts? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = 'Clearing...';
+        btn.disabled = true;
+        
+        await fetch(`${API_BASE}/api/mcp/clear`, { method: 'DELETE' });
+        
+        btn.textContent = '✅ Cleared';
+        fetchKnowledgeBase();
+        
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }, 2000);
+    } catch (e) {
+        alert('Error clearing knowledge base data');
+        const btn = event.target;
+        btn.textContent = 'Clear Data';
+        btn.disabled = false;
+    }
+}
+
+async function fetchCallHistory() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/calls/recent?limit=5`);
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        const calls = data.calls || [];
+        const list = document.getElementById('callHistoryList');
+        
+        if (calls.length === 0) {
+            list.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.8rem;">No call history available.</p>';
+            return;
+        }
+
+        list.innerHTML = '';
+        calls.forEach(call => {
+            const dateStr = new Date(call.timestamp).toLocaleString();
+            const durationStr = call.duration_seconds > 0 ? `${call.duration_seconds}s` : 'Unknown';
+            const intentStr = call.intent !== 'unknown' ? `<span class="status-pill">${call.intent}</span>` : '';
+            const statusColor = call.status === 'completed' ? 'var(--success-green)' : 'var(--text-secondary)';
+            
+            // Encode transcript as a JSON string to pass it to the modal
+            const transcriptJson = encodeURIComponent(JSON.stringify(call.transcript || []));
+            const summaryText = (call.summary || 'No summary available').replace(/'/g, "\\'");
+
+            list.innerHTML += `<div class="call-item" style="display: block; cursor: pointer; padding: 1rem; border-left: 3px solid ${statusColor};" onclick="showTranscriptModal('${summaryText}', '${transcriptJson}')">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <strong style="color: white; font-size: 0.9rem;">To: ${call.caller}</strong>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">${dateStr}</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Duration: ${durationStr}</span>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Status: ${call.status}</span>
+                    ${intentStr}
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                    <strong>Summary:</strong> ${call.summary}
+                </p>
+            </div>`;
+        });
+    } catch (e) {
+        console.error("Failed to fetch call history", e);
+    }
+}
+
+function showTranscriptModal(summary, transcriptEncoded) {
+    let transcriptHtml = '';
+    try {
+        const transcript = JSON.parse(decodeURIComponent(transcriptEncoded));
+        if (transcript && transcript.length > 0) {
+            transcriptHtml = transcript.map(t => {
+                const isAI = t.role === 'assistant';
+                const color = isAI ? 'var(--accent-blue)' : 'white';
+                const name = isAI ? 'AI Twin' : 'Manager';
+                return `<div style="margin-bottom: 0.8rem; background: rgba(255,255,255,0.05); padding: 0.8rem; border-radius: 8px;">
+                            <strong style="color: ${color}; font-size: 0.8rem;">${name}</strong>
+                            <p style="margin-top: 0.3rem; font-size: 0.9rem; line-height: 1.4; color: var(--text-secondary);">${t.content}</p>
+                        </div>`;
+            }).join('');
+        } else {
+            transcriptHtml = '<p style="color: var(--text-secondary); font-size: 0.9rem;">No transcript recorded for this call.</p>';
+        }
+    } catch (e) {
+        transcriptHtml = '<p style="color: var(--error-red); font-size: 0.9rem;">Failed to load transcript.</p>';
+    }
+
+    const modal = document.createElement('div');
+    modal.id = 'transcriptModal';
+    modal.style = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-color); padding: 2.5rem; border-radius: 20px; border: 1px solid var(--glass-border); z-index: 205; width: 600px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 0 50px rgba(0,0,0,0.8);';
+    
+    modal.innerHTML = `
+        <h2 style="margin-bottom: 1rem; flex-shrink: 0;">Call Details</h2>
+        <div style="flex-grow: 1; overflow-y: auto; padding-right: 1rem;">
+            <div style="margin-bottom: 1.5rem; background: rgba(88,166,255,0.1); border: 1px solid var(--accent-blue); padding: 1rem; border-radius: 12px;">
+                <h3 style="color: white; font-size: 0.9rem; margin-bottom: 0.5rem;">AI Summary</h3>
+                <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.5;">${summary}</p>
+            </div>
+            <h3 style="color: white; font-size: 1rem; margin-bottom: 1rem;">Transcript</h3>
+            ${transcriptHtml}
+        </div>
+        <button class="btn" style="width: 100%; margin-top: 1.5rem; flex-shrink: 0;" onclick="document.body.removeChild(document.getElementById('transcriptModal')); document.getElementById('modalOverlay').style.display = 'none';">Close</button>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('modalOverlay').style.display = 'block';
+    
+    // Add custom close handler for overlay
+    const overlay = document.getElementById('modalOverlay');
+    const oldOnclick = overlay.onclick;
+    overlay.onclick = function() {
+        if (document.getElementById('transcriptModal')) {
+            document.body.removeChild(document.getElementById('transcriptModal'));
+        }
+        if (oldOnclick) oldOnclick();
+        else overlay.style.display = 'none';
+        overlay.onclick = oldOnclick; // restore
+    };
+}
+
 init();

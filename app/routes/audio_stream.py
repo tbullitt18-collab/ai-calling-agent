@@ -4,6 +4,7 @@ Bridges Vonage WebSocket ↔ Gemini (conversation) ↔ Google TTS / ElevenLabs.
 """
 
 import json
+import os
 import struct
 import logging
 import asyncio
@@ -12,13 +13,13 @@ import time
 from flask import Blueprint, request, jsonify
 from app import sock
 from app.services.vonage_service import generate_answer_ncco, generate_error_ncco
-from app.models.call_session import SessionManager
+from app.models.call_session import SessionManager, get_session_manager
 from app.services.conversation_service import ConversationEngine, AgentPersona
 
 logger = logging.getLogger(__name__)
 audio_bp = Blueprint('audio', __name__)
 
-session_manager = SessionManager()
+session_manager = get_session_manager()
 
 
 # ── Vonage Webhooks ──────────────────────────────────────────────────
@@ -69,7 +70,15 @@ def webhook_events():
         logger.info(f"Call {uuid} ended with status: {status}")
         try:
             from app.services.call_logger_service import get_call_logger
+            from app.models.call_session import get_session_manager
+            
             call_logger = get_call_logger()
+            sm = get_session_manager()
+            
+            # Fetch transcript from session manager
+            transcript = sm.get_conversation_history(uuid)
+            summary = call_logger._generate_summary(transcript) if transcript else "No conversation recorded."
+
             if call_logger.calls is not None:
                 call_logger.calls.update_one(
                     {"call_uuid": uuid},
@@ -77,10 +86,15 @@ def webhook_events():
                         "status": status,
                         "end_reason": data.get('reason', ''),
                         "duration_seconds": int(duration) if duration else 0,
+                        "transcript": transcript,
+                        "summary": summary
                     }},
                     upsert=True
                 )
                 logger.info(f"Call event logged to MongoDB: {uuid} → {status}")
+                
+            # Clean up session
+            sm.delete_session(uuid)
         except Exception as e:
             logger.warning(f"Failed to log call event to MongoDB: {e}")
     
@@ -108,7 +122,7 @@ def _has_speech(pcm_bytes: bytes, threshold: float = 0.015) -> bool:
     return _compute_rms(pcm_bytes) > threshold
 
 
-def _tail_is_silent(pcm_bytes: bytes, threshold: float = 0.015, tail_ms: int = 500) -> bool:
+def _tail_is_silent(pcm_bytes: bytes, threshold: float = 0.015, tail_ms: int = 1200) -> bool:
     """
     Check if the tail end of a buffer is silent.
     tail_ms: how many milliseconds of silence at the end to require.
@@ -222,22 +236,51 @@ def media_stream(ws, call_uuid: str):
     except Exception as e:
         logger.warning(f"Failed to load workplace setup: {e}")
 
-    # Build persona with call context + workplace setup
-    full_context = f"You are calling to report: {reason}. "
-    if setup_context:
-        full_context += f"YOUR WORKPLACE INFO (use when asked): {setup_context}. "
-    full_context += (
-        f"CRITICAL MEMORY FILES/NOTES: '{notes}'. "
-        f"If you are asked any specific factual questions (like your employee ID, shift details, or return date), strictly reference your workplace info and notes. "
-        f"Be brief and professional."
-    )
+    # ── IBM Bob Legal Intake Mode ──────────────────────────────────────
+    if reason == 'legal_intake':
+        # Load the legal intake system prompt from the knowledge base file
+        _legal_prompt_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            'ibm_bob_legal_prompt.txt'
+        )
+        try:
+            with open(_legal_prompt_path, 'r', encoding='utf-8') as _f:
+                _legal_custom = _f.read()
+        except FileNotFoundError:
+            logger.error(f"Legal intake prompt not found at {_legal_prompt_path}")
+            _legal_custom = ""
+        
+        persona = AgentPersona(
+            name="Todd Bullitt",
+            role="disaster survivor applicant",
+            represented_user="Todd Bullitt",
+            tone="intelligent, distressed but articulate and factual",
+            custom_instructions=_legal_custom
+        )
+        engine = ConversationEngine(persona=persona)
+        # Override the system prompt entirely for legal intake
+        engine.system_prompt = _legal_custom
+        conversation_history = []
+        logger.info("IBM BOB LEGAL INTAKE MODE ACTIVATED")
+    else:
+        # Build persona with call context + workplace setup
+        full_context = f"You are calling to report: {reason}. "
+        if setup_context:
+            full_context += f"YOUR WORKPLACE INFO (use when asked): {setup_context}. "
+        full_context += (
+            f"CRITICAL MEMORY FILES/NOTES: '{notes}'. "
+            f"If you are asked any specific factual questions (like your employee ID, shift details, or return date), strictly reference your workplace info and notes. "
+            f"NEVER BREAK CHARACTER. NEVER mention being an AI, looking up a database, or checking your system. "
+            f"If you don't know the answer to something you should know (like your manager's name), act flustered and human. Say something like 'Oh man, my mind just went totally blank for a second, sorry' or 'Wow, I'm drawing a complete blank right now, I'm really flustered.' "
+            f"Be brief, casual, and professional."
+        )
 
-    persona = AgentPersona(
-        represented_user=represented_user,
-        custom_instructions=full_context
-    )
-    engine = ConversationEngine(persona=persona)
-    conversation_history = []
+        persona = AgentPersona(
+            represented_user=represented_user,
+            custom_instructions=full_context
+        )
+        engine = ConversationEngine(persona=persona)
+        conversation_history = []
     
     # Speech state machine
     audio_buffer = bytearray()
@@ -245,31 +288,49 @@ def media_stream(ws, call_uuid: str):
     
     # Echo suppression: after sending TTS audio, ignore incoming audio
     # for the duration of playback + margin so the AI doesn't hear itself
-    echo_suppress_until = 0.0  # timestamp when suppression ends
-    ECHO_MARGIN_SECS = 0.4     # extra margin after TTS playback ends
+    state = {"echo_suppress_until": 0.0}  # timestamp when suppression ends
+    ECHO_MARGIN_SECS = 0.15    # extra margin after TTS playback ends
     
     # Thresholds
     SPEECH_THRESHOLD = 0.015   # RMS above this = speech detected
     MIN_SPEECH_SECS = 0.5      # Minimum speech duration before STT
     MAX_BUFFER_SECS = 10.0     # Safety limit to prevent unbounded growth
-    TAIL_SILENCE_MS = 700      # ms of silence at tail to end utterance
+    TAIL_SILENCE_MS = 450      # ms of silence at tail to end utterance
     
     logger.info(f"Call context — Reason: {reason}, Voice: {voice_id}")
     
     try:
+        import queue
+        outbound_queue = queue.Queue()
+        
         # Main audio receive loop
         while True:
-            message = ws.receive()
+            # Drain queue and send before blocking on receive
+            while not outbound_queue.empty():
+                try:
+                    chunk_to_send = outbound_queue.get_nowait()
+                    ws.send(chunk_to_send)
+                except Exception as e:
+                    logger.error(f"Error sending queued audio: {e}")
+                    raise
+                    
+            try:
+                # Use a small timeout so we can loop around and check the queue frequently
+                message = ws.receive(timeout=0.05)
+            except Exception as e:
+                # ConnectionClosed is caught by the outer try/except
+                raise e
+                
             if message is None:
-                logger.info("WebSocket closed by client")
-                break
+                # Just a timeout
+                continue
             
             # Vonage sends binary PCM audio or text control messages
             if isinstance(message, bytes):
                 chunk = message
                 
                 # ── Echo suppression: drop audio while our own TTS is playing ──
-                if time.time() < echo_suppress_until:
+                if time.time() < state["echo_suppress_until"]:
                     continue
                 
                 buf_secs = len(audio_buffer) / (16000 * 2)
@@ -301,25 +362,36 @@ def media_stream(ws, call_uuid: str):
                         should_process = True
                     
                     if should_process:
-                        # Transcribe audio using Google Cloud STT
-                        logger.info("Sending to Google STT...")
-                        manager_text = _transcribe_audio(audio_buffer)
+                        # Copy the buffer to process in background
+                        buf_copy = bytearray(audio_buffer)
                         
-                        if manager_text:
-                            logger.info(f"STT result: '{manager_text}' — sending to GPT...")
-                            tts_bytes_sent = _send_tts_response(
-                                ws, None, voice_id, engine, 
-                                conversation_history, call_uuid,
-                                user_message=manager_text,
-                                user_id=call_user_id
-                            )
-                            # Set echo suppression window based on TTS playback length
-                            if tts_bytes_sent and tts_bytes_sent > 0:
-                                playback_secs = tts_bytes_sent / (16000 * 2)
-                                echo_suppress_until = time.time() + playback_secs + ECHO_MARGIN_SECS
-                                logger.info(f"Echo suppression active for {playback_secs + ECHO_MARGIN_SECS:.1f}s")
-                        else:
-                            logger.info("STT returned empty — skipping (likely background noise)")
+                        def process_utterance(audio_data):
+                            logger.info("Sending to Google STT...")
+                            manager_text = _transcribe_audio(audio_data)
+                            
+                            if manager_text:
+                                logger.info(f"STT result: '{manager_text}' — streaming to Gemini+TTS...")
+                                from app.services.streaming_pipeline import stream_response_to_audio
+                                tts_bytes_sent = stream_response_to_audio(
+                                    outbound_queue=outbound_queue,
+                                    voice_id=voice_id,
+                                    engine=engine,
+                                    conversation_history=conversation_history,
+                                    call_uuid=call_uuid,
+                                    user_message=manager_text,
+                                    user_id=call_user_id,
+                                    session_manager=session_manager,
+                                )
+                                # Set echo suppression window based on TTS playback length
+                                if tts_bytes_sent and tts_bytes_sent > 0:
+                                    playback_secs = tts_bytes_sent / (16000 * 2)
+                                    state["echo_suppress_until"] = time.time() + playback_secs + ECHO_MARGIN_SECS
+                                    logger.info(f"Echo suppression active for {playback_secs + ECHO_MARGIN_SECS:.1f}s")
+                            else:
+                                logger.info("STT returned empty — skipping (likely background noise)")
+                                
+                        import threading
+                        threading.Thread(target=process_utterance, args=(buf_copy,)).start()
                         
                         # Reset state machine
                         audio_buffer.clear()
@@ -338,7 +410,12 @@ def media_stream(ws, call_uuid: str):
                         
                         name = represented_user if represented_user != "the user" else ""
                         
-                        if reason and reason.lower() not in ('calling in', 'none', ''):
+                        if reason == 'legal_intake':
+                            # IBM Bob Legal Intake — exact Node 1 opener
+                            openers = [
+                                "Hello, I am Todd Bullitt. I am calling to open an emergency legal intake regarding my FEMA disaster file number 630596501, Disaster DR-4782-KY. My situation is critical, and I need a disaster relief attorney to evaluate a federal Administrative Procedure Act claim against FEMA for Unreasonable Agency Delay and Constructive Denial."
+                            ]
+                        elif reason and reason.lower() not in ('calling in', 'none', ''):
                             # Calling with a specific reason — sound like a real person
                             reason_lower = reason.lower()
                             openers = [
@@ -371,13 +448,13 @@ def media_stream(ws, call_uuid: str):
                             
                         # Send the greeting out to the user's phone
                         tts_bytes_sent = _send_tts_response(
-                            ws, text=initial_greeting, voice_id=voice_id,
+                            outbound_queue, text=initial_greeting, voice_id=voice_id,
                             engine=None, conversation_history=None, call_uuid=None
                         )
                         # Suppress echo for the duration of the greeting playback
                         if tts_bytes_sent and tts_bytes_sent > 0:
                             playback_secs = tts_bytes_sent / (16000 * 2)
-                            echo_suppress_until = time.time() + playback_secs + ECHO_MARGIN_SECS
+                            state["echo_suppress_until"] = time.time() + playback_secs + ECHO_MARGIN_SECS
                             logger.info(f"Greeting echo suppression for {playback_secs + ECHO_MARGIN_SECS:.1f}s")
                     elif event == 'websocket:disconnected':
                         logger.info("Vonage WebSocket disconnected")
@@ -409,7 +486,7 @@ def _transcribe_audio(audio_buffer: bytearray) -> str:
 
 
 def _send_tts_response(
-    ws, 
+    outbound_queue, 
     text: str = None,
     voice_id: str = None,
     engine: ConversationEngine = None,
@@ -419,10 +496,10 @@ def _send_tts_response(
     user_id: str = None
 ):
     """
-    Generate AI response + TTS audio and send to Vonage WebSocket.
+    Generate AI response + TTS audio and queue it to be sent to Vonage WebSocket.
     
     Args:
-        ws: WebSocket connection
+        outbound_queue: Queue to put the audio chunks in
         text: Direct text to speak (skips AI if provided)
         voice_id: Voice ID (ElevenLabs cloned or Google system voice)
         engine: ConversationEngine instance
@@ -463,9 +540,9 @@ def _send_tts_response(
                 chunk_size = 640  # 20ms at 16kHz 16-bit
                 for i in range(0, len(audio_bytes), chunk_size):
                     chunk = audio_bytes[i:i + chunk_size]
-                    ws.send(chunk)
+                    outbound_queue.put(chunk)
                 
-                logger.info(f"Sent {total_bytes_sent} bytes of TTS audio")
+                logger.info(f"Queued {total_bytes_sent} bytes of TTS audio")
         finally:
             loop.close()
             
@@ -500,25 +577,24 @@ async def _synthesize_and_convert(text: str, voice_id: str = None) -> bytes:
                 from app.config import ELEVENLABS_API_KEY
                 
                 # ElevenLabs REST API for TTS — returns raw audio
+                # CRITICAL: output_format MUST be a query parameter, not in the JSON body
                 url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
                 headers = {
                     "xi-api-key": ELEVENLABS_API_KEY,
-                    "Content-Type": "application/json",
-                    "Accept": "audio/wav"
+                    "Content-Type": "application/json"
                 }
                 payload = {
                     "text": text,
-                    "model_id": "eleven_multilingual_v2",
+                    "model_id": "eleven_turbo_v2_5",
                     "voice_settings": {
-                        "stability": 0.5,
-                        "similarity_boost": 0.75,
-                        "style": 0.0,
+                        "stability": 0.35,
+                        "similarity_boost": 0.80,
+                        "style": 0.45,
                         "use_speaker_boost": True
-                    },
-                    "output_format": "pcm_16000"
+                    }
                 }
                 
-                resp = httpx.post(url, headers={**headers, "Accept": "audio/mpeg"}, json={**payload, "output_format": "pcm_16000"}, timeout=15.0)
+                resp = httpx.post(url, headers=headers, json=payload, params={"output_format": "pcm_16000"}, timeout=15.0)
                 
                 if resp.status_code == 200:
                     audio_data = resp.content

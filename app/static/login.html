@@ -236,7 +236,7 @@
                     <input type="text" id="loginUsername" placeholder="Enter username" autocomplete="username" required>
                 </div>
                 <div class="form-group">
-                    <label>Password</label>
+                    <label style="display: flex; justify-content: space-between;">Password <a onclick="showForgotPassword()" style="color: var(--accent-blue); font-weight: normal; cursor: pointer; text-decoration: underline;">Forgot?</a></label>
                     <input type="password" id="loginPassword" placeholder="Enter password"
                         autocomplete="current-password" required>
                 </div>
@@ -274,6 +274,20 @@
                 <div class="error-msg" id="registerError"></div>
             </form>
 
+            <!-- FORGOT PASSWORD FORM -->
+            <form id="forgotPasswordForm" class="hidden" onsubmit="return handleForgotPassword(event)">
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">Enter your username or email and we'll send you a mock reset link.</p>
+                <div class="form-group">
+                    <label>Username or Email</label>
+                    <input type="text" id="forgotUsername" placeholder="Enter username or email" required>
+                </div>
+                <button type="submit" class="btn-primary" id="forgotBtn">Send Reset Link</button>
+                <div class="error-msg" id="forgotError"></div>
+                <div class="toggle-link" style="margin-top: 1rem;">
+                    <a onclick="showLogin()">Back to Sign in</a>
+                </div>
+            </form>
+
             <!-- TOGGLE -->
             <div class="toggle-link" id="toggleLogin">
                 Don't have an account? <a onclick="showRegister()">Create one</a>
@@ -291,6 +305,7 @@
     <script>
         function showRegister() {
             document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('forgotPasswordForm').classList.add('hidden');
             document.getElementById('registerForm').classList.remove('hidden');
             document.getElementById('toggleLogin').classList.add('hidden');
             document.getElementById('toggleRegister').classList.remove('hidden');
@@ -301,12 +316,57 @@
 
         function showLogin() {
             document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('forgotPasswordForm').classList.add('hidden');
             document.getElementById('loginForm').classList.remove('hidden');
             document.getElementById('toggleRegister').classList.add('hidden');
             document.getElementById('toggleLogin').classList.remove('hidden');
             document.getElementById('formTitle').textContent = 'Sign in to your dashboard';
             document.getElementById('loginError').textContent = '';
             document.getElementById('registerError').textContent = '';
+        }
+
+        function showForgotPassword() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('toggleLogin').classList.add('hidden');
+            document.getElementById('toggleRegister').classList.add('hidden');
+            document.getElementById('forgotPasswordForm').classList.remove('hidden');
+            document.getElementById('formTitle').textContent = 'Reset your password';
+            document.getElementById('forgotError').textContent = '';
+            document.getElementById('forgotError').style.color = '';
+        }
+
+        async function handleForgotPassword(e) {
+            e.preventDefault();
+            const btn = document.getElementById('forgotBtn');
+            const errEl = document.getElementById('forgotError');
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            
+            try {
+                const resp = await fetch('/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: document.getElementById('forgotUsername').value
+                    })
+                });
+                const data = await resp.json();
+                
+                if (resp.ok) {
+                    errEl.style.color = '#4ade80'; // Success green
+                    errEl.textContent = data.message || 'If an account exists, a reset link has been sent.';
+                } else {
+                    errEl.style.color = '#ff4d4d'; // Error red
+                    errEl.textContent = data.error || 'Failed to send reset link';
+                }
+            } catch (err) {
+                errEl.style.color = '#ff4d4d';
+                errEl.textContent = 'Network error. Please try again.';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Send Reset Link';
+            }
         }
 
         async function handleLogin(e) {

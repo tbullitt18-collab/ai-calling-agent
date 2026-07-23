@@ -54,7 +54,7 @@ class MongoDBMCPClient:
     async def get_tools(self) -> List[Any]:
         """Fetch available tools from the MCP server."""
         if not self._connected:
-            # Return mock tools for the hackathon demo if not connected
+            # Return mock tools for the IBM hackathon demo if not connected
             return [
                 {
                     "name": "search_calendar",
@@ -90,7 +90,7 @@ class MongoDBMCPClient:
     async def call_tool(self, name: str, arguments: dict) -> Any:
         """Call a tool on the MCP server."""
         if not self._connected:
-            # Mock responses for hackathon purposes
+            # Mock responses for IBM hackathon purposes
             if name == "search_calendar":
                 return "The calendar shows availability for that time. Todd is free."
             elif name == "query_faq":

@@ -1,0 +1,23 @@
+# Ignore large files and dev artifacts for Cloud Build
+.git
+.git.corrupted
+.github
+.venv
+venv
+__pycache__
+.pytest_cache
+android-app
+google-ads-mcp
+marketing
+marketing_system
+profiler
+raincheck-landing
+jdk-17.0.11+9
+jdk.zip
+*.log
+*.mp3
+*.pcm
+*.zip
+*.tmp
+node_modules
+.env.example

@@ -12,7 +12,7 @@ mcp_bp = Blueprint('mcp', __name__)
 
 @mcp_bp.route('/seed', methods=['POST'])
 def seed_demo_data():
-    """Seed demo data for hackathon judges."""
+    """Seed demo data for the current user."""
     from app.services.mongodb_mcp_service import get_mcp_service
 
     user_id = session.get('username', 'default')
@@ -23,6 +23,22 @@ def seed_demo_data():
         return jsonify({"status": "seeded", "counts": result})
     except Exception as e:
         logger.error(f"Error seeding demo data: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@mcp_bp.route('/clear', methods=['DELETE'])
+def clear_knowledge_base():
+    """Clear all knowledge base data for the current user."""
+    from app.services.mongodb_mcp_service import get_mcp_service
+
+    user_id = session.get('username', 'default')
+
+    try:
+        mcp = get_mcp_service()
+        result = mcp.clear_knowledge_base(user_id)
+        return jsonify({"status": "cleared", "counts": result})
+    except Exception as e:
+        logger.error(f"Error clearing knowledge base: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -63,6 +79,23 @@ def add_faq():
         return jsonify({"status": "created", "id": inserted_id}), 201
     except Exception as e:
         logger.error(f"Error adding FAQ: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@mcp_bp.route('/faqs/<faq_id>', methods=['DELETE'])
+def delete_faq(faq_id):
+    """Delete an FAQ by ID."""
+    from app.services.mongodb_mcp_service import get_mcp_service
+    user_id = session.get('username', 'default')
+    
+    try:
+        mcp = get_mcp_service()
+        success = mcp.delete_faq(user_id, faq_id)
+        if success:
+            return jsonify({"status": "deleted"})
+        return jsonify({"error": "Not found or not authorized"}), 404
+    except Exception as e:
+        logger.error(f"Error deleting FAQ: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -111,6 +144,23 @@ def add_calendar_event():
         return jsonify({"error": str(e)}), 500
 
 
+@mcp_bp.route('/calendar/<event_id>', methods=['DELETE'])
+def delete_calendar_event(event_id):
+    """Delete a calendar event by ID."""
+    from app.services.mongodb_mcp_service import get_mcp_service
+    user_id = session.get('username', 'default')
+    
+    try:
+        mcp = get_mcp_service()
+        success = mcp.delete_calendar_event(user_id, event_id)
+        if success:
+            return jsonify({"status": "deleted"})
+        return jsonify({"error": "Not found or not authorized"}), 404
+    except Exception as e:
+        logger.error(f"Error deleting calendar event: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 # ------------------------------------------------------------------
 # Contact endpoints
 # ------------------------------------------------------------------
@@ -154,4 +204,21 @@ def add_contact():
         return jsonify({"status": "created", "id": inserted_id}), 201
     except Exception as e:
         logger.error(f"Error adding contact: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@mcp_bp.route('/contacts/<contact_id>', methods=['DELETE'])
+def delete_contact(contact_id):
+    """Delete a contact by ID."""
+    from app.services.mongodb_mcp_service import get_mcp_service
+    user_id = session.get('username', 'default')
+    
+    try:
+        mcp = get_mcp_service()
+        success = mcp.delete_contact(user_id, contact_id)
+        if success:
+            return jsonify({"status": "deleted"})
+        return jsonify({"error": "Not found or not authorized"}), 404
+    except Exception as e:
+        logger.error(f"Error deleting contact: {e}")
         return jsonify({"error": str(e)}), 500

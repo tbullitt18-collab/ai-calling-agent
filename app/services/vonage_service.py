@@ -80,6 +80,51 @@ def _get_voice():
     return _vonage_voice
 
 
+def send_sms(to_number: str, text: str) -> str:
+    """
+    Dispatches an SMS via Vonage REST API.
+    to_number should be E.164 format: e.g. "14045551234"
+    """
+    import os
+    import requests
+    from app.config import VONAGE_API_KEY, VONAGE_API_SECRET, VONAGE_NUMBER
+    
+    api_key = VONAGE_API_KEY
+    api_secret = VONAGE_API_SECRET
+    from_number = VONAGE_NUMBER  # Your provisioned Vonage number
+
+    if not all([api_key, api_secret, from_number]):
+        return "SMS failed: Missing Vonage credentials in environment."
+
+    # Sanitize number — strip non-digits, ensure no leading +
+    clean_to = "".join(filter(str.isdigit, to_number))
+
+    payload = {
+        "api_key": api_key,
+        "api_secret": api_secret,
+        "to": clean_to,
+        "from": from_number,
+        "text": text
+    }
+
+    try:
+        resp = requests.post(
+            "https://rest.nexmo.com/sms/json",
+            data=payload,
+            timeout=5
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        status = data["messages"][0]["status"]
+        if status == "0":
+            return f"SMS sent successfully to {to_number}."
+        else:
+            error = data["messages"][0].get("error-text", "Unknown error")
+            return f"SMS failed with Vonage status {status}: {error}"
+    except Exception as e:
+        return f"SMS dispatch error: {str(e)}"
+
+
 def generate_answer_ncco(call_uuid: str, reason: str = None, voice_id: str = None) -> list:
     """
     Generate NCCO for answering a call with WebSocket audio stream.

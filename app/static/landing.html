@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Rain Check — AI-powered voice twin that handles workplace communication. Schedule calls, clone your voice, reduce anxiety.">
+    <meta name="keywords" content="AI voice assistant, voice cloning, workplace communication, call scheduling, mental wellness, voice twin">
+    <meta name="author" content="Rain Check AI">
+    <meta name="theme-color" content="#06090e">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://raincheck-api-562927333515.us-central1.run.app/">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:title" content="Rain Check — AI Voice Twin">
+    <meta property="og:description" content="AI-powered voice assistant for workplace communication & mental wellness.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://raincheck-api-562927333515.us-central1.run.app/">
+    <meta property="og:site_name" content="Rain Check AI">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Rain Check — AI Voice Twin">
+    <meta name="twitter:description" content="AI-powered voice assistant for workplace communication & mental wellness.">
+
+    <title>Rain Check — AI Voice Twin | AI-Powered Call Assistant</title>
+
+    <!-- Structured Data: SoftwareApplication -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Rain Check",
+        "applicationCategory": "CommunicationApplication",
+        "operatingSystem": "Android",
+        "description": "AI-powered voice twin that handles workplace communication calls on your behalf. Clone your voice, schedule calls, and reduce workplace anxiety.",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "ratingCount": "12"
+        }
+    }
+    </script>
+
+    <!-- Structured Data: Organization -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Rain Check AI",
+        "url": "https://raincheck-api-562927333515.us-central1.run.app/",
+        "description": "AI-powered voice twin technology for workplace communication and mental wellness."
+    }
+    </script>
+
+    <!-- Structured Data: FAQ -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "What is Rain Check?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Rain Check is an AI-powered voice twin that makes workplace calls on your behalf. It uses voice cloning and AI to handle tasks like calling in sick, scheduling appointments, and other workplace communications."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "How does voice cloning work in Rain Check?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "You record a short voice sample, and Rain Check creates an AI clone of your voice. The AI then uses this cloned voice to make phone calls that sound just like you."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "Is Rain Check free?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Yes, Rain Check is free to use. It's built with Google Cloud AI and designed to help reduce workplace communication anxiety."
+                }
+            }
+        ]
+    }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #06090e;
+            --surface: rgba(18, 22, 33, 0.4);
+            --surface-glow: rgba(26, 33, 48, 0.7);
+            --primary: #4f94ff;
+            --primary-glow: rgba(79, 148, 255, 0.4);
+            --secondary: #a371f7;
+            --success: #3fb950;
+            --text: #f0f6fc;
+            --text-dim: #9ca3af;
+            --border: rgba(255, 255, 255, 0.06);
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* ── Dynamic Ambient Background ── */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: var(--bg);
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: 0.5;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+
+        .orb-1 {
+            width: 50vw;
+            height: 50vw;
+            background: rgba(79, 148, 255, 0.15);
+            top: -10%;
+            left: -10%;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 40vw;
+            height: 40vw;
+            background: rgba(163, 113, 247, 0.12);
+            bottom: -10%;
+            right: -10%;
+            animation-delay: -5s;
+        }
+
+        .orb-3 {
+            width: 30vw;
+            height: 30vw;
+            background: rgba(63, 185, 80, 0.08);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(10%, 15%) scale(1.1); }
+        }
+
+        /* ── Navigation ── */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem 2rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        .nav-logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .drop {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2.5rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+        }
+
+        /* ── Hero ── */
+        .hero {
+            text-align: center;
+            padding: 8rem 2rem 5rem;
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid rgba(63, 185, 80, 0.2);
+            color: var(--success);
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.4rem 1.2rem;
+            border-radius: 30px;
+            margin-bottom: 2rem;
+            letter-spacing: 0.5px;
+            backdrop-filter: blur(10px);
+            animation: fadeInDown 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(63, 185, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+        }
+
+        .hero h1 {
+            font-size: clamp(3rem, 6vw, 5.5rem);
+            font-weight: 800;
+            letter-spacing: -2px;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary), var(--secondary), var(--primary));
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShine 5s linear infinite;
+        }
+
+        @keyframes gradientShine {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-dim);
+            line-height: 1.6;
+            max-width: 650px;
+            margin: 0 auto 3rem;
+            font-weight: 300;
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s backwards;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.6rem;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            text-decoration: none;
+            border: 1px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #3b7ee0);
+            color: #fff;
+            box-shadow: 0 8px 32px var(--primary-glow);
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px var(--primary-glow);
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-outline {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px);
+            color: var(--text);
+        }
+
+        .btn-outline:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-3px);
+        }
+
+        /* ── How It Works ── */
+        .how-it-works {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 6rem 2rem 4rem;
+            position: relative;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .section-header h2 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+        }
+
+        .section-header .section-tag {
+            display: inline-block;
+            background: rgba(79, 148, 255, 0.1);
+            border: 1px solid rgba(79, 148, 255, 0.2);
+            color: var(--primary);
+            padding: 0.3rem 1rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 1.5rem;
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            position: relative;
+        }
+
+        .steps-grid::before {
+            content: '';
+            position: absolute;
+            top: 80px;
+            left: 20%;
+            right: 20%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), var(--secondary), transparent);
+            opacity: 0.3;
+            z-index: 0;
+        }
+
+        .step-card {
+            background: var(--surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 2.5rem 2rem;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
+        }
+
+        .step-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 0%, var(--step-glow, rgba(79,148,255,0.08)), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .step-card:hover {
+            border-color: rgba(79, 148, 255, 0.3);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .step-card:hover::before {
+            opacity: 1;
+        }
+
+        .step-number {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin: 0 auto 1.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-card:nth-child(1) .step-number {
+            background: linear-gradient(135deg, rgba(79, 148, 255, 0.2), rgba(79, 148, 255, 0.05));
+            border: 2px solid rgba(79, 148, 255, 0.3);
+            color: var(--primary);
+        }
+        .step-card:nth-child(2) .step-number {
+            background: linear-gradient(135deg, rgba(163, 113, 247, 0.2), rgba(163, 113, 247, 0.05));
+            border: 2px solid rgba(163, 113, 247, 0.3);
+            color: var(--secondary);
+        }
+        .step-card:nth-child(3) .step-number {
+            background: linear-gradient(135deg, rgba(63, 185, 80, 0.2), rgba(63, 185, 80, 0.05));
+            border: 2px solid rgba(63, 185, 80, 0.3);
+            color: var(--success);
+        }
+
+        .step-card:nth-child(1) { --step-glow: rgba(79,148,255,0.1); }
+        .step-card:nth-child(2) { --step-glow: rgba(163,113,247,0.1); }
+        .step-card:nth-child(3) { --step-glow: rgba(63,185,80,0.1); }
+
+        .step-emoji {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .step-card h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            color: #fff;
+        }
+
+        .step-card p {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        /* ── App Preview / Demo ── */
+        .preview-section {
+            max-width: 1100px;
+            margin: 2rem auto 0;
+            padding: 4rem 2rem;
+        }
+
+        .preview-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            animation: fadeInUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.5s backwards;
+        }
+
+        .browser-mockup {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5), 0 0 40px rgba(79, 148, 255, 0.1);
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+        }
+
+        .browser-header {
+            background: rgba(0,0,0,0.2);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .dot {
+            width: 12px; height: 12px; border-radius: 50%;
+        }
+        .dot.r { background: #ff5f56; }
+        .dot.y { background: #ffbd2e; }
+        .dot.g { background: #27c93f; }
+
+        .demo-dashboard {
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            min-height: 340px;
+        }
+
+        .demo-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.5rem;
+        }
+
+        .demo-panel h4 {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+        }
+
+        .demo-voice-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem 0.8rem;
+            background: rgba(88, 166, 255, 0.06);
+            border: 1px solid rgba(88, 166, 255, 0.15);
+            border-radius: 10px;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .demo-voice-item .active-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--primary);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--primary);
+        }
+
+        .demo-schedule-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .demo-schedule-item .time {
+            color: var(--secondary);
+            font-weight: 700;
+        }
+
+        .demo-status-line {
+            font-family: 'Outfit', monospace;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            padding: 0.3rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .demo-status-line .status-ok {
+            color: var(--success);
+        }
+
+        .demo-btn {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 0.8rem;
+            background: linear-gradient(135deg, var(--primary), #3b7ee0);
+            color: #fff;
+            border: none;
+        }
+
+        /* ── Features ── */
+        .features {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 6rem 2rem;
+            position: relative;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-card {
+            background: var(--surface);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2.5rem 2rem;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 0%, rgba(79, 148, 255, 0.1), transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .feature-card:hover {
+            border-color: rgba(79, 148, 255, 0.3);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            font-size: 2.2rem;
+            margin-bottom: 1.2rem;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .feature-card h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            color: #fff;
+        }
+
+        .feature-card p {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        /* ── Use Cases ── */
+        .use-cases {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 5rem 2rem;
+        }
+
+        .use-case-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .use-case-card {
+            background: linear-gradient(135deg, var(--surface), rgba(0,0,0,0.2));
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 2rem;
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+            transition: all 0.3s ease;
+        }
+
+        .use-case-card:hover {
+            border-color: rgba(163, 113, 247, 0.3);
+            transform: translateY(-4px);
+        }
+
+        .use-case-icon {
+            font-size: 1.8rem;
+            flex-shrink: 0;
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(163, 113, 247, 0.1);
+            border-radius: 14px;
+            border: 1px solid rgba(163, 113, 247, 0.15);
+        }
+
+        .use-case-card h3 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+        }
+
+        .use-case-card p {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        /* ── Tech Stack ── */
+        .tech {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 5rem 2rem;
+            text-align: center;
+            background: linear-gradient(90deg, transparent, var(--surface), transparent);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tech-pills {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .tech-pill {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            padding: 0.8rem 1.5rem;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-dim);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tech-pill:hover {
+            border-color: var(--primary);
+            color: #fff;
+            background: rgba(79, 148, 255, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 148, 255, 0.15);
+        }
+
+        /* ── Call to Action ── */
+        .cta {
+            text-align: center;
+            padding: 10rem 2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .cta h2 {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 1.5rem;
+        }
+
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 3rem 2rem;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        /* ── Scroll Reveal ── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ── Global Animations ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes typewriter {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .nav-links { display: none; }
+            .hero h1 { font-size: 2.5rem; }
+            .steps-grid { grid-template-columns: 1fr; }
+            .steps-grid::before { display: none; }
+            .feature-grid { grid-template-columns: 1fr; }
+            .use-case-grid { grid-template-columns: 1fr; }
+            .demo-dashboard { grid-template-columns: 1fr; }
+            .cta h2 { font-size: 2.2rem; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <nav>
+        <div class="nav-logo">
+            <span class="drop">💧</span> Rain Check
+        </div>
+        <ul class="nav-links">
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#use-cases">Use Cases</a></li>
+            <li><a href="#tech">Technology</a></li>
+            <li><a href="#contact">Contact</a></li>
+        </ul>
+    </nav>
+
+    <!-- ── HERO ── -->
+    <section class="hero">
+        <div class="hero-badge">
+            <div class="pulse-dot"></div>
+            Deployed Live on Google Cloud Run
+        </div>
+        <h1>Never stress about <br><span class="gradient-text">calling in sick</span> again.</h1>
+        <p>Rain Check is an advanced AI agent that handles workplace communication calls for you. Clone your voice, set your schedule, and let the AI do the talking — so you can rest easy.</p>
+        
+        <div class="hero-actions">
+            <!-- Updated URL to Production Service -->
+            <a href="/dashboard" class="btn btn-primary">Launch Dashboard →</a>
+            <a href="#how-it-works" class="btn btn-outline">See How It Works</a>
+        </div>
+
+        <!-- Hero Artwork -->
+        <div style="max-width: 700px; margin: 4rem auto 0; animation: fadeInUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.5s backwards;">
+            <img src="/static/images/hero-voice-clone.png" alt="AI Voice Cloning Visualization" style="max-width: 100%; border-radius: 12px; margin-top: 1rem; opacity: 0.8; mix-blend-mode: screen; filter: hue-rotate(20deg);">
+        </div>
+    </section>
+
+    <!-- ── HOW IT WORKS ── -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="section-header reveal">
+            <span class="section-tag">Getting Started</span>
+            <h2>Three steps to <span class="gradient-text">freedom</span></h2>
+            <p style="color: var(--text-dim); max-width: 600px; margin: 0 auto; font-size: 1.1rem;">
+                Set up once, use forever. Rain Check makes calling out as easy as tapping a button.
+            </p>
+        </div>
+        <div class="steps-grid">
+            <div class="step-card reveal" style="transition-delay: 0.1s;">
+                <div class="step-number">1</div>
+                <span class="step-emoji">🎙️</span>
+                <h3>Clone Your Voice</h3>
+                <p>Upload a few minutes of audio and our AI creates a hyper-realistic digital twin of your voice using ElevenLabs technology.</p>
+            </div>
+            <div class="step-card reveal" style="transition-delay: 0.2s;">
+                <div class="step-number">2</div>
+                <span class="step-emoji">📋</span>
+                <h3>Set Up Your Profile</h3>
+                <p>Enter your work schedule, employee ID, manager's number, and preferred call reasons. Your AI twin knows the context.</p>
+            </div>
+            <div class="step-card reveal" style="transition-delay: 0.3s;">
+                <div class="step-number">3</div>
+                <span class="step-emoji">📞</span>
+                <h3>Schedule or Call Now</h3>
+                <p>Pick a time and reason — or hit "Call Now." Your voice twin handles the entire conversation naturally and intelligently.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── LIVE APP PREVIEW ── -->
+    <section class="preview-section">
+        <div class="section-header reveal">
+            <span class="section-tag">Live Preview</span>
+            <h2>Your Dashboard, <span class="gradient-text">at a Glance</span></h2>
+        </div>
+        <div class="preview-container reveal">
+            <div class="browser-mockup">
+                <div class="browser-header">
+                    <div class="dot r"></div>
+                    <div class="dot y"></div>
+                    <div class="dot g"></div>
+                    <span style="margin-left: 0.8rem; font-size: 0.75rem; color: var(--text-dim); font-family: monospace;">raincheck-api-fjhj5jpaea-uc.a.run.app</span>
+                </div>
+                <div class="demo-dashboard">
+                    <div class="demo-panel">
+                        <h4>🎙️ Voice Twins</h4>
+                        <div class="demo-voice-item">
+                            <span>Todd — Professional</span>
+                            <div class="active-dot"></div>
+                        </div>
+                        <div class="demo-voice-item" style="border-color: var(--border); background: rgba(255,255,255,0.02);">
+                            <span style="color: var(--text-dim);">Todd — Casual</span>
+                            <span style="font-size: 0.65rem; color: var(--text-dim);">Select</span>
+                        </div>
+                        <div class="demo-btn">+ New Clone</div>
+                    </div>
+                    <div class="demo-panel">
+                        <h4>📞 Schedule Call-Out</h4>
+                        <div class="demo-schedule-item">
+                            <span>Sick Day — Manager</span>
+                            <span class="time">06:00 AM</span>
+                        </div>
+                        <div class="demo-schedule-item">
+                            <span>Running Late — Shift Lead</span>
+                            <span class="time">07:30 AM</span>
+                        </div>
+                        <div style="margin-top: 1rem;">
+                            <div class="demo-status-line"><span class="status-ok">●</span> WSS Audio Bridge Connected</div>
+                            <div class="demo-status-line"><span class="status-ok">●</span> Vertex AI Gemini Ready</div>
+                            <div class="demo-status-line"><span class="status-ok">●</span> Vonage Outbound OK</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── FEATURES ── -->
+    <section class="features" id="features">
+        <div class="section-header reveal">
+            <span class="section-tag">Core Features</span>
+            <h2>Why Rain Check?</h2>
+            <p style="color: var(--text-dim); max-width: 600px; margin: 0 auto; font-size: 1.1rem;">
+                A fully-autonomous phone assistant built to protect your peace of mind. Let the AI do the talking.
+            </p>
+        </div>
+        <div class="feature-grid">
+            <div class="feature-card reveal">
+                <img src="/static/images/hero-voice-clone.png" alt="Voice Cloning" style="width: 100%; border-radius: 12px; margin-bottom: 1.2rem; opacity: 0.85;">
+                <h3>Hyper-Realistic Voice</h3>
+                <p>State-of-the-art TTS clones your voice perfectly. The person on the other end won't know they're talking to an AI agent.</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="feature-icon">🧠</div>
+                <h3>Contextual Intelligence</h3>
+                <p>Powered by Google Gemini 2.0. Your twin dynamically responds to follow-up questions, deflects hostility, and ends calls politely.</p>
+            </div>
+            <div class="feature-card reveal">
+                <img src="/static/images/feature-scheduling.png" alt="Call Scheduling" style="width: 100%; border-radius: 12px; margin-bottom: 1.2rem; opacity: 0.85;">
+                <h3>Delayed Scheduling</h3>
+                <p>Don't want to wake up at 6 AM to call in? Schedule the time and go back to sleep. Your AI twin handles it.</p>
+            </div>
+            <div class="feature-card reveal">
+                <img src="/static/images/feature-privacy.png" alt="Privacy and Security" style="width: 100%; border-radius: 12px; margin-bottom: 1.2rem; opacity: 0.85;">
+                <h3>Privacy First</h3>
+                <p>Audio and transcripts are processed securely. Voice clones remain strictly localized to your authenticated session.</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="feature-icon">✏️</div>
+                <h3>Editable Voice Profiles</h3>
+                <p>Fine-tune your voice clones at any time. Rename, update characteristics, or swap active profiles from the dashboard.</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="feature-icon">👤</div>
+                <h3>Personalized Setup</h3>
+                <p>Configure your employee ID, shift schedule, and workplace details once — your AI uses them to sound completely authentic.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── USE CASES ── -->
+    <section class="use-cases" id="use-cases">
+        <div class="section-header reveal">
+            <span class="section-tag">Real World</span>
+            <h2>When you'd use <span class="gradient-text">Rain Check</span></h2>
+        </div>
+        <div class="use-case-grid">
+            <div class="use-case-card reveal">
+                <div class="use-case-icon">🤒</div>
+                <div>
+                    <h3>Sick Days</h3>
+                    <p>Feeling terrible and can't bring yourself to make the call? Let your AI twin break the news professionally.</p>
+                </div>
+            </div>
+            <div class="use-case-card reveal">
+                <div class="use-case-icon">🧠</div>
+                <div>
+                    <h3>Mental Health Days</h3>
+                    <p>No need to explain yourself over the phone. Just schedule the call and take the day to recharge.</p>
+                </div>
+            </div>
+            <div class="use-case-card reveal">
+                <div class="use-case-icon">⏰</div>
+                <div>
+                    <h3>Running Late</h3>
+                    <p>Stuck in traffic? Your twin calls ahead so your team knows you're on the way — without the awkward phone stress.</p>
+                </div>
+            </div>
+            <div class="use-case-card reveal">
+                <div class="use-case-icon">🚨</div>
+                <div>
+                    <h3>Personal Emergencies</h3>
+                    <p>Life happens. When you're dealing with an emergency, the last thing you need is a phone call to manage.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── TECH STACK ── -->
+    <section class="tech" id="tech">
+        <div class="reveal">
+            <h2>Powered by Modern Infrastructure</h2>
+            <div class="tech-pills">
+                <span class="tech-pill">⚡ Google Cloud Run</span>
+                <span class="tech-pill">📞 Vonage Voice API</span>
+                <span class="tech-pill">🧠 Vertex AI (Gemini 2.0)</span>
+                <span class="tech-pill">🎧 Google Speech-to-Text</span>
+                <span class="tech-pill">🗣️ ElevenLabs</span>
+                <span class="tech-pill">🟢 MongoDB Atlas</span>
+                <span class="tech-pill">🐍 Python / Flask</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── CTA ── -->
+    <section class="cta" id="contact">
+        <div class="reveal">
+            <h2>Ready to regain your mornings?</h2>
+            <p style="font-size: 1.2rem; margin-bottom: 3rem;">Join the beta and test the absolute cutting-edge of voice AI.</p>
+            <a href="/dashboard" class="btn btn-primary" style="margin-bottom: 2rem;">Go to Application</a>
+            
+            <div style="color: var(--text-dim); font-size: 0.95rem; margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 2rem;">
+                Author: <strong>Todd Bullitt</strong> <br>
+                Hiram, Georgia &mdash; <a href="mailto:tbullitt18@gmail.com" style="color: var(--primary); text-decoration: none;">tbullitt18@gmail.com</a>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        &copy; 2026 Rain Check &mdash; Promoting Workplace Mental Health
+    </footer>
+
+    <!-- ── Scroll Reveal Script ── -->
+    <script>
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    </script>
+
+</body>
+</html>

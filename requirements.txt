@@ -38,4 +38,8 @@ aiohttp>=3.9.0
 
 # Monitoring
 python-json-logger>=2.0.0
-schedule>=1.2.0
+
+# Cloud Scheduler (persistent job scheduling)
+google-cloud-scheduler>=2.0.0
+
+anthropic

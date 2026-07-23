@@ -29,9 +29,9 @@ def _normalize_phone(number: str) -> str:
     # 11 digits starting with 1 → US number, prepend +
     elif len(digits) == 11 and digits.startswith('1'):
         return f"+{digits}"
-    # Already has + prefix
+    # Already has + prefix — return cleaned version
     elif number.startswith('+'):
-        return number
+        return f"+{digits}"
     # Fallback: prepend +
     else:
         return f"+{digits}"
@@ -92,3 +92,57 @@ def call_now():
         return jsonify({"error": f"Call failed: {e}"}), 500
 
 
+@session_bp.route('/execute-pending', methods=['POST'])
+def execute_pending():
+    """
+    Execute any pending scheduled calls whose time has arrived.
+    Called by Google Cloud Scheduler or can be polled manually.
+    This endpoint is the key to surviving Cloud Run scale-to-zero.
+    """
+    from app.config import SCHEDULER_SECRET
+    
+    auth_header = request.headers.get('X-CloudScheduler-Secret')
+    if auth_header != SCHEDULER_SECRET:
+        logger.warning(f"Unauthorized execution attempt for pending calls. Provided secret: {auth_header}")
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        executed = scheduler.execute_pending_calls()
+        return jsonify({
+            "status": "ok",
+            "executed": executed,
+            "count": len(executed)
+        })
+    except Exception as e:
+        logger.error(f"Execute pending error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@session_bp.route('/pending', methods=['GET'])
+def list_pending():
+    """List all pending scheduled calls."""
+    try:
+        calls = scheduler.get_pending_calls()
+        # Convert datetime objects for JSON serialization
+        for call in calls:
+            for key in ('scheduled_time', 'created_at'):
+                if key in call and hasattr(call[key], 'isoformat'):
+                    call[key] = call[key].isoformat()
+        return jsonify({"pending_calls": calls})
+    except Exception as e:
+        logger.error(f"List pending error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@session_bp.route('/cancel/<job_id>', methods=['POST'])
+def cancel_scheduled(job_id):
+    """Cancel a pending scheduled call."""
+    try:
+        cancelled = scheduler.cancel_call(job_id)
+        if cancelled:
+            return jsonify({"status": "cancelled", "job_id": job_id})
+        else:
+            return jsonify({"error": "Job not found or already executed"}), 404
+    except Exception as e:
+        logger.error(f"Cancel error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500

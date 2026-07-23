@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 import logging
 import os
 import json
@@ -23,10 +23,11 @@ def list_voices():
         {"voice_id": "en-US-Casual-K", "name": "Google Casual (Male - Casual)", "source": "system", "status": "active"},
     ]
     
-    # Also fetch user's custom voices from MongoDB
+    # Also fetch THIS user's custom voices from MongoDB (not all users)
     try:
-        profiles = voice_profile_model.collection.find()
-        for p in profiles:
+        user_id = session.get('username', 'default')
+        user_voices = voice_profile_model.list_user_voices(user_id)
+        for p in user_voices:
             voices.append({
                 "voice_id": p.get("voice_id"),
                 "name": p.get("name"),
@@ -71,25 +72,31 @@ def clone_voice():
         # Call ElevenLabs Instant Voice Cloning API
         logger.info(f"Submitting {len(temp_paths)} audio samples to ElevenLabs for voice cloning...")
         
-        files_payload = [("files", (os.path.basename(p), open(p, "rb"))) for p in temp_paths]
-        data_payload = {
-            "name": name,
-            "labels": json.dumps({"category": "cloned", "app": "raincheck"}),
-        }
-        
-        response = httpx.post(
-            "https://api.elevenlabs.io/v1/voices/add",
-            headers={"xi-api-key": ELEVENLABS_API_KEY},
-            data=data_payload,
-            files=files_payload,
-            timeout=60.0,
-        )
-        response.raise_for_status()
+        file_handles = [open(p, "rb") for p in temp_paths]
+        try:
+            files_payload = [("files", (os.path.basename(p), fh)) for p, fh in zip(temp_paths, file_handles)]
+            data_payload = {
+                "name": name,
+                "labels": json.dumps({"category": "cloned", "app": "raincheck"}),
+            }
+            
+            response = httpx.post(
+                "https://api.elevenlabs.io/v1/voices/add",
+                headers={"xi-api-key": ELEVENLABS_API_KEY},
+                data=data_payload,
+                files=files_payload,
+                timeout=60.0,
+            )
+            response.raise_for_status()
+        finally:
+            for fh in file_handles:
+                fh.close()
         
         voice_id = response.json()["voice_id"]
         
         # PERSISTENCE
-        profile_id = voice_profile_model.create_profile(voice_id, name)
+        user_id = session.get('username', 'default')
+        profile_id = voice_profile_model.create_profile(voice_id, name, user_id=user_id)
         logger.info(f"ElevenLabs voice cloned: {voice_id} ({name})")
         
         return jsonify({
@@ -110,7 +117,10 @@ def clone_voice():
     finally:
         # Cleanup temp files
         for p in temp_paths:
-            if os.path.exists(p): os.remove(p)
+            try:
+                if os.path.exists(p): os.remove(p)
+            except OSError:
+                pass
 
 
 @cloning_bp.route('/<voice_id>', methods=['PUT'])

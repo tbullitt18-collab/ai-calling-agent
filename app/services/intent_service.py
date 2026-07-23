@@ -56,7 +56,7 @@ def detect_intent(message: str, context: dict = None) -> IntentResult:
         IntentResult with detected intent and entities
     """
     try:
-        from app.services.google_ai_service import gemini_chat
+        from app.services.anthropic_service import claude_chat
 
         messages = [{"role": "system", "content": INTENT_SYSTEM_PROMPT}]
         
@@ -68,7 +68,7 @@ def detect_intent(message: str, context: dict = None) -> IntentResult:
         
         messages.append({"role": "user", "content": message})
         
-        response_text = gemini_chat(
+        response_text = claude_chat(
             messages=messages,
             max_tokens=200,
             temperature=0.1,

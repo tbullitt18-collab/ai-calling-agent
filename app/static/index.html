@@ -13,7 +13,7 @@
 
 <body>
     <!-- ── Display Name Gate (shown if no permanent name set) ── -->
-    <div id="nameGate" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); z-index: 200; display: none;">
+    <div id="nameGate" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); z-index: 200;">
         <div style="max-width: 440px; margin: 15vh auto; padding: 2.5rem; background: var(--card-bg); border: 1px solid var(--glass-border); border-radius: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); text-align: center;">
             <div style="font-size: 3rem; margin-bottom: 1rem;">👤</div>
             <h2 style="font-size: 1.5rem; color: #fff; text-transform: none; letter-spacing: -0.5px; margin-bottom: 0.5rem;">Welcome to Rain Check</h2>
@@ -25,6 +25,7 @@
             <div class="form-group" style="margin-bottom: 1.5rem; text-align: left; background: rgba(88, 166, 255, 0.1); padding: 1rem; border-radius: 8px; border: 1px solid var(--accent-blue);">
                 <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; text-transform: none; color: white;">
                     <input type="checkbox" id="nameGateConsent" style="width: auto; margin-top: 0.2rem;">
+
                     <span style="font-size: 0.8rem; font-weight: 400; line-height: 1.4;">
                         <strong>Privacy Acknowledgment:</strong> I understand that my display name, voice clone, and knowledge base will be processed by Rain Check to conduct calls on my behalf.
                     </span>
@@ -56,8 +57,8 @@
         <!-- ── Tab Navigation ── -->
         <div style="display: flex; gap: 0.5rem; margin-bottom: 2rem;">
             <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📞 Dashboard</button>
-            <button class="tab-btn" data-tab="knowledge" onclick="switchTab('knowledge')">🧠 Knowledge Base</button>
-            <button class="tab-btn" data-tab="setup" onclick="switchTab('setup')">⚙️ Setup</button>
+            <button class="tab-btn" data-tab="knowledge" onclick="switchTab('knowledge')">🧠 Dynamic Knowledge Base (MCP)</button>
+            <button class="tab-btn" data-tab="setup" onclick="switchTab('setup')">⚙️ Core Identity</button>
             <button class="tab-btn" data-tab="voices" onclick="switchTab('voices')">🎙️ Voice Profiles</button>
         </div>
 
@@ -119,6 +120,11 @@
                         <p style="color: var(--text-secondary); font-size: 0.8rem;">No calls scheduled.</p>
                     </div>
                     
+                    <h2 style="margin-top: 2rem;">Call History & Transcripts</h2>
+                    <div id="callHistoryList">
+                        <p style="color: var(--text-secondary); font-size: 0.8rem;">Loading call history...</p>
+                    </div>
+                    
                     <!-- MCP Activity Feed -->
                     <h2 style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
                         <span>🧠 MCP Activity</span>
@@ -137,13 +143,16 @@
                 <div class="card" style="grid-column: span 2;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem;">
                         <div>
-                            <h2>🧠 Personal Knowledge Base (MongoDB)</h2>
+                            <h2>🧠 Dynamic Knowledge Base (MongoDB MCP)</h2>
                             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
-                                Your AI twin uses Gemini Function Calling to query this MongoDB data in real-time during calls. 
-                                Add your FAQs, schedule, and contacts so it can answer questions accurately.
+                                Your AI twin uses Gemini Function Calling (Model Context Protocol) to query this MongoDB data in real-time during calls. 
+                                Add your FAQs, schedule, and contacts so it can dynamically fetch answers it doesn't already know.
                             </p>
                         </div>
-                        <button class="btn btn-outline" style="white-space: nowrap;" onclick="seedDemoData()">Seed Demo Data</button>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-outline" style="white-space: nowrap;" onclick="seedDemoData()">Seed Demo Data</button>
+                            <button class="btn btn-outline" style="white-space: nowrap; border-color: rgba(255, 50, 50, 0.5); color: #ff8888;" onclick="clearKnowledgeBase()">Clear Data</button>
+                        </div>
                     </div>
 
                     <div class="grid" style="grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
@@ -194,7 +203,7 @@
         <div class="tab-content" id="tab-setup">
             <div class="grid">
                 <div class="card" style="grid-column: span 2;">
-                    <h2>⚙️ Workplace Setup</h2>
+                    <h2>⚙️ Core Identity (Prompt Context)</h2>
                     <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 2rem;">
                         Set up your work details so your AI twin has all the context it needs. This information helps your twin sound authentic during calls.
                     </p>
@@ -295,8 +304,12 @@
             <input type="text" id="voiceName" placeholder="e.g. My Professional Voice">
         </div>
         <div class="form-group">
-            <label>Upload High-Quality Samples</label>
-            <input type="file" id="voiceFiles" multiple accept="audio/wav">
+            <label>Record a Voice Sample (10-30 seconds)</label>
+            <button id="recordBtn" type="button" class="btn btn-outline" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onclick="toggleRecording()">
+                🔴 Start Recording
+            </button>
+            <p id="recordStatus" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; text-align: center;"></p>
+            <input type="file" id="voiceFiles" multiple accept="audio/wav" style="display:none;">
         </div>
         <div class="form-group" style="margin-top: 1.5rem; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid var(--glass-border);">
             <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; text-transform: none; color: white;">
@@ -355,7 +368,7 @@
         style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-color); padding: 2.5rem; border-radius: 20px; border: 1px solid var(--glass-border); z-index: 205; width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 0 50px rgba(0,0,0,0.8);">
         <h2 style="margin-bottom: 1rem;">Privacy & Security Policy</h2>
         <div style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6;">
-            <p style="margin-bottom: 1rem;">At Rain Check, your privacy and data security are our highest priorities. This hackathon prototype is built with a security-first architecture.</p>
+            <p style="margin-bottom: 1rem;">At Rain Check, your privacy and data security are our highest priorities. This IBM hackathon prototype is built with a security-first architecture.</p>
             
             <h3 style="color: white; margin-top: 1.5rem; margin-bottom: 0.5rem;">Data Handling & Storage</h3>
             <ul style="margin-left: 1.5rem; margin-bottom: 1rem;">
@@ -374,7 +387,7 @@
     </div>
 
     <footer style="text-align: center; margin-top: 4rem; margin-bottom: 2rem; font-size: 0.8rem; color: var(--text-secondary);">
-        Rain Check &copy; 2026. Built for the Google Cloud Rapid Agent Hackathon.<br>
+        Rain Check &copy; 2026. Built by Todd Bullitt.<br>
         <a href="#" onclick="showPrivacyModal(); return false;" style="color: var(--accent-blue); text-decoration: none; margin-top: 0.5rem; display: inline-block;">Privacy & Security Policy</a>
     </footer>
 

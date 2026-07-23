@@ -80,14 +80,14 @@ class CallLogger:
     def _generate_summary(self, transcript: list) -> str:
         """Use Gemini to summarize a call transcript."""
         try:
-            from app.services.google_ai_service import gemini_chat
+            from app.services.anthropic_service import claude_chat
 
             text = "\n".join([
                 f"{'AI' if t.get('role') == 'assistant' else 'Manager'}: {t.get('content', '')}"
                 for t in transcript
             ])
             
-            response = gemini_chat(
+            response = claude_chat(
                 messages=[
                     {"role": "system", "content": "Summarize this phone call transcript in 2-3 sentences. Focus on: reason for call, outcome, and any follow-up needed."},
                     {"role": "user", "content": text}

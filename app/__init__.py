@@ -25,7 +25,8 @@ def create_app():
     """Application factory for Rain Check."""
     app = Flask(__name__, static_folder='static', static_url_path='/static')
     app.secret_key = os.getenv('FLASK_SECRET_KEY', 'raincheck-dev-secret-2025')
-    CORS(app)
+    base_url = os.getenv('BASE_URL', 'http://127.0.0.1:5000')
+    CORS(app, origins=[base_url, "http://localhost:5000"])
     
     # Initialize extensions with app
     sock.init_app(app)
@@ -35,14 +36,14 @@ def create_app():
     def require_login():
         """Gate all dashboard routes behind authentication."""
         # Allow unauthenticated access to these paths
-        public_paths = ['/login', '/register', '/health', '/webhook/', '/ws/', '/static/']
+        public_paths = ['/login', '/register', '/health', '/webhook/', '/ws/', '/static/', '/images/', '/favicon', '/session/execute-pending', '/google2926cc71ab5a8588.html', '/robots.txt', '/sitemap.xml']
         path = request.path
         
-        if any(path.startswith(p) for p in public_paths):
+        if path == '/' or any(path.startswith(p) for p in public_paths):
             return  # Allow through
         
-        if path == '/' and request.method == 'GET':
-            # Root page requires auth — redirect to login if not authenticated
+        if path == '/dashboard' and request.method == 'GET':
+            # Dashboard requires auth — redirect to login if not authenticated
             if not session.get('authenticated'):
                 return redirect('/login')
         elif not path.startswith('/static'):
@@ -51,7 +52,23 @@ def create_app():
                 return redirect('/login')
     
     @app.route('/')
-    def index():
+    def landing():
+        return app.send_static_file('landing.html')
+
+    @app.route('/google2926cc71ab5a8588.html')
+    def google_verification():
+        return "google-site-verification: google2926cc71ab5a8588.html"
+
+    @app.route('/robots.txt')
+    def robots():
+        return app.send_static_file('robots.txt')
+
+    @app.route('/sitemap.xml')
+    def sitemap():
+        return app.send_static_file('sitemap.xml')
+
+    @app.route('/dashboard')
+    def dashboard():
         return app.send_static_file('index.html')
     
     with app.app_context():

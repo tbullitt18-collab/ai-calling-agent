@@ -7,9 +7,9 @@ from app.config import FLASK_ENV
 
 health_bp = Blueprint('health', __name__)
 
-@health_bp.route('/', methods=['GET'])
+@health_bp.route('/health/status', methods=['GET'])
 def index():
-    """Health check endpoint."""
+    """Health status endpoint."""
     return jsonify({
         "service": "Rain Check AI Voice Application",
         "version": "2.0.0",

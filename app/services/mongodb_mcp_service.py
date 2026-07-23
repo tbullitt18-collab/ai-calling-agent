@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional
 
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class MongoDBMCPService:
         Returns a natural language summary of matching events, or
         'No events found.' if none match.  Limited to 5 results.
         """
-        if not self.user_calendar:
+        if self.user_calendar is None:
             return "Calendar service unavailable."
 
         try:
@@ -97,7 +98,7 @@ class MongoDBMCPService:
         Returns a natural language summary of matching FAQs, or
         'No matching FAQ found.' if empty.  Limited to 3 results.
         """
-        if not self.user_faqs:
+        if self.user_faqs is None:
             return "FAQ service unavailable."
 
         try:
@@ -138,7 +139,7 @@ class MongoDBMCPService:
         Uses case-insensitive regex.  Returns contact details as a string,
         or 'Contact not found.' if empty.
         """
-        if not self.user_contacts:
+        if self.user_contacts is None:
             return "Contacts service unavailable."
 
         try:
@@ -165,18 +166,37 @@ class MongoDBMCPService:
             logger.error(f"lookup_contact error: {e}")
             return "Error looking up contact."
 
+    def book_calendar(self, user_id: str, title: str, date: str, description: str = "") -> str:
+        """
+        Inserts a new calendar event into the user's calendar collection.
+        Returns a confirmation string for the LLM to read back to the caller.
+        """
+        try:
+            event = {
+                "user_id": user_id,
+                "title": title,
+                "date": date,           # Expect ISO string: "2026-07-24T15:00:00"
+                "description": description,
+                "created_at": datetime.utcnow().isoformat(),
+                "source": "ai_calling_agent"
+            }
+            result = self.user_calendar.insert_one(event)
+            return f"Successfully booked: '{title}' on {date}. Event ID: {str(result.inserted_id)}"
+        except Exception as e:
+            return f"Failed to book calendar event: {str(e)}"
+
     # ------------------------------------------------------------------
     # Demo data seeding
     # ------------------------------------------------------------------
 
     def seed_demo_data(self, user_id: str) -> dict:
         """
-        Seed demo data for hackathon judges.
+        Seed demo data for IBM hackathon judges.
 
         Uses update_one with upsert=True keyed on user_id + a unique field
         to avoid duplicates.  Returns counts of seeded items.
         """
-        if not self.user_calendar:
+        if self.user_calendar is None:
             return {"error": "MongoDB unavailable"}
 
         try:
@@ -235,7 +255,28 @@ class MongoDBMCPService:
             }
 
         except Exception as e:
-            logger.error(f"seed_demo_data error: {e}")
+            return {"error": str(e)}
+
+    def clear_knowledge_base(self, user_id: str) -> dict:
+        """
+        Clear all knowledge base data (calendar, FAQs, contacts) for a user.
+        """
+        if self.user_calendar is None:
+            return {"error": "MongoDB unavailable"}
+
+        try:
+            cal_result = self.user_calendar.delete_many({"user_id": user_id})
+            faq_result = self.user_faqs.delete_many({"user_id": user_id})
+            contact_result = self.user_contacts.delete_many({"user_id": user_id})
+
+            logger.info(f"Knowledge base cleared for user {user_id}: {cal_result.deleted_count} events, {faq_result.deleted_count} FAQs, {contact_result.deleted_count} contacts deleted")
+            return {
+                "calendar_events_deleted": cal_result.deleted_count,
+                "faqs_deleted": faq_result.deleted_count,
+                "contacts_deleted": contact_result.deleted_count,
+            }
+        except Exception as e:
+            logger.error(f"clear_knowledge_base error: {e}")
             return {"error": str(e)}
 
     # ------------------------------------------------------------------
@@ -244,7 +285,7 @@ class MongoDBMCPService:
 
     def get_faqs(self, user_id: str) -> list:
         """Return all FAQs for the user as a list of dicts."""
-        if not self.user_faqs:
+        if self.user_faqs is None:
             return []
         try:
             faqs = list(self.user_faqs.find({"user_id": user_id}))
@@ -257,7 +298,7 @@ class MongoDBMCPService:
 
     def add_faq(self, user_id: str, question: str, answer: str) -> str:
         """Add a new FAQ. Returns the inserted ID as a string."""
-        if not self.user_faqs:
+        if self.user_faqs is None:
             return ""
         try:
             result = self.user_faqs.insert_one({
@@ -272,9 +313,20 @@ class MongoDBMCPService:
             logger.error(f"add_faq error: {e}")
             return ""
 
+    def delete_faq(self, user_id: str, faq_id: str) -> bool:
+        """Delete an FAQ by ID."""
+        if self.user_faqs is None:
+            return False
+        try:
+            result = self.user_faqs.delete_one({"_id": ObjectId(faq_id), "user_id": user_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"delete_faq error: {e}")
+            return False
+
     def get_calendar(self, user_id: str) -> list:
         """Return all calendar events for the user."""
-        if not self.user_calendar:
+        if self.user_calendar is None:
             return []
         try:
             events = list(self.user_calendar.find({"user_id": user_id}))
@@ -287,7 +339,7 @@ class MongoDBMCPService:
 
     def add_calendar_event(self, user_id: str, title: str, date: str, description: str = "") -> str:
         """Add a calendar event. Returns the inserted ID as a string."""
-        if not self.user_calendar:
+        if self.user_calendar is None:
             return ""
         try:
             result = self.user_calendar.insert_one({
@@ -303,9 +355,20 @@ class MongoDBMCPService:
             logger.error(f"add_calendar_event error: {e}")
             return ""
 
+    def delete_calendar_event(self, user_id: str, event_id: str) -> bool:
+        """Delete a calendar event by ID."""
+        if self.user_calendar is None:
+            return False
+        try:
+            result = self.user_calendar.delete_one({"_id": ObjectId(event_id), "user_id": user_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"delete_calendar_event error: {e}")
+            return False
+
     def get_contacts(self, user_id: str) -> list:
         """Return all contacts for the user."""
-        if not self.user_contacts:
+        if self.user_contacts is None:
             return []
         try:
             contacts = list(self.user_contacts.find({"user_id": user_id}))
@@ -318,7 +381,7 @@ class MongoDBMCPService:
 
     def add_contact(self, user_id: str, name: str, role: str, phone: str = "", email: str = "") -> str:
         """Add a contact. Returns the inserted ID as a string."""
-        if not self.user_contacts:
+        if self.user_contacts is None:
             return ""
         try:
             doc = {
@@ -338,3 +401,15 @@ class MongoDBMCPService:
         except Exception as e:
             logger.error(f"add_contact error: {e}")
             return ""
+
+    def delete_contact(self, user_id: str, contact_id: str) -> bool:
+        """Delete a contact by ID."""
+        if self.user_contacts is None:
+            return False
+        try:
+            result = self.user_contacts.delete_one({"_id": ObjectId(contact_id), "user_id": user_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            logger.error(f"delete_contact error: {e}")
+            return False
+
